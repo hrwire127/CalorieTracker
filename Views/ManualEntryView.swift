@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ManualEntryView: View {
     @Environment(\.dismiss) private var dismiss
@@ -7,13 +8,16 @@ struct ManualEntryView: View {
     @State private var foodName = ""
     @State private var caloriesText = ""
     @State private var validationMessage: String?
+    
+    @State private var selectedItem: PhotosPickerItem? = nil
+    @State private var selectedImageData: Data? = nil
 
-    let onSave: (String, Int) -> Void
+    let onSave: (String, Int, Data?) -> Void
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Food") {
+                Section("Food Details") {
                     TextField("Food Name", text: $foodName)
                         .textInputAutocapitalization(.words)
                         .focused($focusedField, equals: .name)
@@ -21,6 +25,48 @@ struct ManualEntryView: View {
                     TextField("Calories", text: $caloriesText)
                         .keyboardType(.numberPad)
                         .focused($focusedField, equals: .calories)
+                }
+                
+                Section("Image (Optional)") {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            if let selectedImageData, let uiImage = UIImage(data: selectedImageData) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 150, height: 150)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .shadow(radius: 4)
+                            }
+                            
+                            PhotosPicker(
+                                selection: $selectedItem,
+                                matching: .images,
+                                photoLibrary: .shared()
+                            ) {
+                                Label(selectedImageData == nil ? "Add Photo" : "Change Photo", systemImage: "photo")
+                                    .font(.headline)
+                            }
+                            .onChange(of: selectedItem) { _, newItem in
+                                Task {
+                                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                                        selectedImageData = data
+                                    }
+                                }
+                            }
+                            
+                            if selectedImageData != nil {
+                                Button("Remove Photo", role: .destructive) {
+                                    selectedItem = nil
+                                    selectedImageData = nil
+                                }
+                                .font(.footnote)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
                 }
 
                 if let validationMessage {
@@ -63,7 +109,7 @@ struct ManualEntryView: View {
                 name: foodName,
                 caloriesText: caloriesText
             )
-            onSave(entry.name, entry.calories)
+            onSave(entry.name, entry.calories, selectedImageData)
             dismiss()
         } catch {
             validationMessage = error.localizedDescription

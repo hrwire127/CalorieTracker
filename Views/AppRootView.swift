@@ -7,6 +7,11 @@ struct AppRootView: View {
                 .tabItem {
                     Label("Today", systemImage: "fork.knife")
                 }
+            
+            HistoryView()
+                .tabItem {
+                    Label("History", systemImage: "calendar.badge.clock")
+                }
 
             StatisticsView()
                 .tabItem {

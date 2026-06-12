@@ -74,7 +74,7 @@ final class DashboardViewModel: ObservableObject {
                 name: entry.name,
                 calories: entry.calories,
                 timestamp: Date(),
-                imageData: imageData,
+                imageData: imageData, // the uploaded or generated image data
                 dailyGoal: goal
             )
 

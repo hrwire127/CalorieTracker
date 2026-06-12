@@ -68,10 +68,11 @@ struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $isShowingManualEntry) {
-                ManualEntryView { name, calories in
+                ManualEntryView { name, calories, imageData in
                     viewModel.addFoodItem(
                         name: name,
                         calories: calories,
+                        imageData: imageData,
                         using: modelContext
                     )
                 }
