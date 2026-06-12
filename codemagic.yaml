@@ -20,12 +20,21 @@ workflows:
           xcodegen generate --spec project.yml
       - name: Build app for iOS Simulator
         script: |
+          mkdir -p /tmp/xcodebuild_logs
+          xcodebuild -version
+          set +e
           xcodebuild build \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild_logs/simulator-build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "---- Relevant build errors ----"
+            grep -nE "error:|fatal error:|No such module|cannot find|failed" /tmp/xcodebuild_logs/simulator-build.log | tail -100 || true
+            exit $BUILD_STATUS
+          fi
     artifacts:
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
@@ -70,9 +79,18 @@ workflows:
           agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
       - name: Build IPA for distribution
         script: |
+          mkdir -p /tmp/xcodebuild_logs
+          xcodebuild -version
+          set +e
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+            --scheme "$XCODE_SCHEME" 2>&1 | tee /tmp/xcodebuild_logs/ipa-build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "---- Relevant build errors ----"
+            grep -nE "error:|fatal error:|No such module|cannot find|failed" /tmp/xcodebuild_logs/ipa-build.log | tail -100 || true
+            exit $BUILD_STATUS
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
