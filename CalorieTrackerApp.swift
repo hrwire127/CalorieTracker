@@ -14,7 +14,8 @@ struct CalorieTrackerApp: App {
 
             let modelConfiguration = ModelConfiguration(
                 schema: schema,
-                isStoredInMemoryOnly: false
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .automatic
             )
 
             modelContainer = try ModelContainer(

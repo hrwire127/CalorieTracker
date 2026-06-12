@@ -3,12 +3,12 @@ import SwiftData
 
 @Model
 final class DailyGoal {
-    var date: Date
-    var targetCalories: Int
-    var totalConsumedCalories: Int
+    var date: Date = Date()
+    var targetCalories: Int = 2000
+    var totalConsumedCalories: Int = 0
 
     @Relationship(deleteRule: .cascade, inverse: \FoodItem.dailyGoal)
-    var foodItems: [FoodItem]
+    var foodItems: [FoodItem]? = []
 
     init(
         date: Date = Calendar.current.startOfDay(for: Date()),
@@ -27,7 +27,7 @@ final class DailyGoal {
     }
 
     func recalculateTotalConsumedCalories() {
-        totalConsumedCalories = foodItems.reduce(0) { total, item in
+        totalConsumedCalories = (foodItems ?? []).reduce(0) { total, item in
             total + item.calories
         }
     }

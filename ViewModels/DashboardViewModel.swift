@@ -79,8 +79,12 @@ final class DashboardViewModel: ObservableObject {
             )
 
             modelContext.insert(foodItem)
-            if !goal.foodItems.contains(where: { item in item.id == foodItem.id }) {
-                goal.foodItems.append(foodItem)
+            
+            if goal.foodItems == nil {
+                goal.foodItems = []
+            }
+            if let items = goal.foodItems, !items.contains(where: { item in item.id == foodItem.id }) {
+                goal.foodItems?.append(foodItem)
             }
             goal.recalculateTotalConsumedCalories()
 
@@ -120,7 +124,7 @@ final class DashboardViewModel: ObservableObject {
             }
             let deletedItemIDs = Set(itemsToDelete.map(\.id))
 
-            goal.foodItems.removeAll { foodItem in
+            goal.foodItems?.removeAll { foodItem in
                 deletedItemIDs.contains(foodItem.id)
             }
 
@@ -143,7 +147,7 @@ final class DashboardViewModel: ObservableObject {
 
     private func updateState(with goal: DailyGoal) {
         dailyGoal = goal
-        foodItems = goal.foodItems.sorted { firstItem, secondItem in
+        foodItems = (goal.foodItems ?? []).sorted { firstItem, secondItem in
             firstItem.timestamp > secondItem.timestamp
         }
     }

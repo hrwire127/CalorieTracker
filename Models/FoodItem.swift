@@ -3,12 +3,10 @@ import SwiftData
 
 @Model
 final class FoodItem {
-    @Attribute(.unique)
-    var id: UUID
-
-    var name: String
-    var calories: Int
-    var timestamp: Date
+    var id: UUID = UUID()
+    var name: String = ""
+    var calories: Int = 0
+    var timestamp: Date = Date()
 
     @Attribute(.externalStorage)
     var imageData: Data?

@@ -17,7 +17,7 @@ struct HistoryView: View {
                 } else {
                     ForEach(dailyGoals) { goal in
                         Section {
-                            let sortedItems = goal.foodItems.sorted { $0.timestamp > $1.timestamp }
+                            let sortedItems = (goal.foodItems ?? []).sorted { $0.timestamp > $1.timestamp }
                             
                             if sortedItems.isEmpty {
                                 Text("No food logged on this day.")
@@ -58,7 +58,7 @@ struct HistoryView: View {
         let itemsToDelete = offsets.map { sortedItems[$0] }
         let idsToDelete = Set(itemsToDelete.map(\.id))
         
-        goal.foodItems.removeAll { idsToDelete.contains($0.id) }
+        goal.foodItems?.removeAll { idsToDelete.contains($0.id) }
         
         for item in itemsToDelete {
             modelContext.delete(item)
