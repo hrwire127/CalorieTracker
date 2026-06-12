@@ -12,6 +12,11 @@ struct AppRootView: View {
                 .tabItem {
                     Label("Stats", systemImage: "chart.bar.xaxis")
                 }
+            
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
         }
     }
 }
