@@ -4,8 +4,8 @@ enum GeminiConfiguration {
     static var apiKey: String {
         UserDefaults.standard.string(forKey: "GeminiApiKey") ?? ""
     }
-    // Folosim varianta "latest" care este mereu activă în v1beta
-    static let model = "gemini-1.5-flash-latest"
+    // Folosim un model din versiunile noi Gemini (ex: 3.5) care este disponibil
+    static let model = "gemini-3.5-flash"
     static func generateContentURL(apiKey: String) -> URL {
         URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
     }
