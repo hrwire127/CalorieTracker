@@ -68,20 +68,22 @@ struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $isShowingManualEntry) {
-                ManualEntryView { name, calories, imageData in
+                ManualEntryView { name, calories, grams, imageData in
                     viewModel.addFoodItem(
                         name: name,
                         calories: calories,
+                        grams: grams,
                         imageData: imageData,
                         using: modelContext
                     )
                 }
             }
             .sheet(isPresented: $isShowingAIEntry) {
-                AICameraEntryView { name, calories, imageData in
+                AICameraEntryView { name, calories, grams, imageData in
                     viewModel.addFoodItem(
                         name: name,
                         calories: calories,
+                        grams: grams,
                         imageData: imageData,
                         using: modelContext
                     )
@@ -238,7 +240,7 @@ private struct FoodItemRowView: View {
                 Text(item.name)
                     .font(.body.weight(.medium))
 
-                Text(item.timestamp.formatted(date: .omitted, time: .shortened))
+                Text(itemDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -266,5 +268,14 @@ private struct FoodItemRowView: View {
                 .font(.title2)
                 .foregroundStyle(.green)
         }
+    }
+
+    private var itemDescription: String {
+        let time = item.timestamp.formatted(date: .omitted, time: .shortened)
+        guard let grams = item.grams else {
+            return time
+        }
+
+        return "\(time) - \(grams) g"
     }
 }

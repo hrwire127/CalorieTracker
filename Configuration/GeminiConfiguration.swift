@@ -10,5 +10,5 @@ enum GeminiConfiguration {
         URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
     }
 
-    static let nutritionistSystemPrompt = #"You are a nutritionist. Analyze this food image and estimate the calories. Return ONLY valid JSON: {"food_name": "name", "estimated_calories": 123}."#
+    static let nutritionistSystemPrompt = #"You are a nutritionist. Analyze this food image and estimate the calories and total food weight in grams. Return ONLY valid JSON: {"food_name": "name", "estimated_calories": 123, "estimated_grams": 250}."#
 }

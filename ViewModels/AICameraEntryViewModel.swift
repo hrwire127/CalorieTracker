@@ -45,6 +45,7 @@ final class AICameraEntryViewModel: ObservableObject {
             pendingDraft = FoodEstimateDraft(
                 foodName: estimate.foodName,
                 calories: estimate.estimatedCalories,
+                grams: estimate.estimatedGrams,
                 imageData: compressedData
             )
         } catch {

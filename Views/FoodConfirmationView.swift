@@ -7,17 +7,19 @@ struct FoodConfirmationView: View {
 
     @State private var foodName: String
     @State private var caloriesText: String
+    @State private var gramsText: String
     @State private var validationMessage: String?
 
     private let imageData: Data?
-    private let onSave: (String, Int, Data?) -> Void
+    private let onSave: (String, Int, Int?, Data?) -> Void
 
     init(
         draft: FoodEstimateDraft,
-        onSave: @escaping (String, Int, Data?) -> Void
+        onSave: @escaping (String, Int, Int?, Data?) -> Void
     ) {
         _foodName = State(initialValue: draft.foodName)
         _caloriesText = State(initialValue: "\(draft.calories)")
+        _gramsText = State(initialValue: draft.grams.map { String($0) } ?? "")
         self.imageData = draft.imageData
         self.onSave = onSave
     }
@@ -46,6 +48,10 @@ struct FoodConfirmationView: View {
                     TextField("Calories", text: $caloriesText)
                         .keyboardType(.numberPad)
                         .focused($focusedField, equals: .calories)
+
+                    TextField("Grams (Optional)", text: $gramsText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .grams)
                 }
 
                 if let validationMessage {
@@ -79,16 +85,21 @@ struct FoodConfirmationView: View {
     }
 
     private var canSave: Bool {
-        FoodEntryValidator.canSave(name: foodName, caloriesText: caloriesText)
+        FoodEntryValidator.canSave(
+            name: foodName,
+            caloriesText: caloriesText,
+            gramsText: gramsText
+        )
     }
 
     private func save() {
         do {
             let entry = try FoodEntryValidator.validate(
                 name: foodName,
-                caloriesText: caloriesText
+                caloriesText: caloriesText,
+                gramsText: gramsText
             )
-            onSave(entry.name, entry.calories, imageData)
+            onSave(entry.name, entry.calories, entry.grams, imageData)
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
@@ -98,5 +109,6 @@ struct FoodConfirmationView: View {
     private enum Field: Hashable {
         case name
         case calories
+        case grams
     }
 }

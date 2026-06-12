@@ -7,12 +7,13 @@ struct ManualEntryView: View {
 
     @State private var foodName = ""
     @State private var caloriesText = ""
+    @State private var gramsText = ""
     @State private var validationMessage: String?
     
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImageData: Data? = nil
 
-    let onSave: (String, Int, Data?) -> Void
+    let onSave: (String, Int, Int?, Data?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -25,6 +26,10 @@ struct ManualEntryView: View {
                     TextField("Calories", text: $caloriesText)
                         .keyboardType(.numberPad)
                         .focused($focusedField, equals: .calories)
+
+                    TextField("Grams (Optional)", text: $gramsText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .grams)
                 }
                 
                 Section("Image (Optional)") {
@@ -100,16 +105,21 @@ struct ManualEntryView: View {
     }
 
     private var canSave: Bool {
-        FoodEntryValidator.canSave(name: foodName, caloriesText: caloriesText)
+        FoodEntryValidator.canSave(
+            name: foodName,
+            caloriesText: caloriesText,
+            gramsText: gramsText
+        )
     }
 
     private func save() {
         do {
             let entry = try FoodEntryValidator.validate(
                 name: foodName,
-                caloriesText: caloriesText
+                caloriesText: caloriesText,
+                gramsText: gramsText
             )
-            onSave(entry.name, entry.calories, selectedImageData)
+            onSave(entry.name, entry.calories, entry.grams, selectedImageData)
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
@@ -119,5 +129,6 @@ struct ManualEntryView: View {
     private enum Field: Hashable {
         case name
         case calories
+        case grams
     }
 }

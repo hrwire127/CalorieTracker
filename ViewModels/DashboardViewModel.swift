@@ -57,12 +57,13 @@ final class DashboardViewModel: ObservableObject {
     func addFoodItem(
         name: String,
         calories: Int,
+        grams: Int? = nil,
         imageData: Data? = nil,
         using modelContext: ModelContext
     ) {
         let entry: ValidatedFoodEntry
         do {
-            entry = try FoodEntryValidator.validate(name: name, calories: calories)
+            entry = try FoodEntryValidator.validate(name: name, calories: calories, grams: grams)
         } catch {
             errorMessage = error.localizedDescription
             return
@@ -73,6 +74,7 @@ final class DashboardViewModel: ObservableObject {
             let foodItem = FoodItem(
                 name: entry.name,
                 calories: entry.calories,
+                grams: entry.grams,
                 timestamp: Date(),
                 imageData: imageData, // the uploaded or generated image data
                 dailyGoal: goal
