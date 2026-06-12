@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AppRootView: View {
+    @AppStorage("AppThemePreference") private var appThemePreference = AppThemePreference.system.rawValue
+
     var body: some View {
         TabView {
             DashboardView()
@@ -23,5 +25,10 @@ struct AppRootView: View {
                     Label("Settings", systemImage: "gear")
                 }
         }
+        .preferredColorScheme(selectedTheme.colorScheme)
+    }
+
+    private var selectedTheme: AppThemePreference {
+        AppThemePreference(rawValue: appThemePreference) ?? .system
     }
 }

@@ -131,6 +131,7 @@ private struct DashboardSummaryView: View {
         VStack(spacing: 22) {
             ProgressRingView(
                 progress: viewModel.progress,
+                remainingCalories: viewModel.remainingCalories,
                 consumedCalories: viewModel.consumedCalories,
                 targetCalories: viewModel.targetCalories,
                 isOverGoal: viewModel.isOverGoal
@@ -160,6 +161,7 @@ private struct DashboardSummaryView: View {
 
 private struct ProgressRingView: View {
     let progress: Double
+    let remainingCalories: Int
     let consumedCalories: Int
     let targetCalories: Int
     let isOverGoal: Bool
@@ -179,17 +181,23 @@ private struct ProgressRingView: View {
                 .animation(.spring(response: 0.45, dampingFraction: 0.85), value: progress)
 
             VStack(spacing: 6) {
-                Text("\(consumedCalories)")
+                Text("\(remainingCalories)")
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .monospacedDigit()
+                    .foregroundStyle(isOverGoal ? .red : .primary)
 
-                Text("of \(targetCalories) kcal")
-                    .font(.subheadline)
+                Text("kcal remaining")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
+
+                Text("\(consumedCalories) used of \(targetCalories)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Consumed \(consumedCalories) of \(targetCalories) calories")
+        .accessibilityLabel("\(remainingCalories) calories remaining. \(consumedCalories) used of \(targetCalories).")
     }
 
     private var progressStyle: AngularGradient {

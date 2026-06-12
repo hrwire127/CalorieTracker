@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DailyGoal.date, order: .reverse) private var dailyGoals: [DailyGoal]
+    private let calendar = Calendar.current
     
     var body: some View {
         NavigationStack {
@@ -31,18 +33,20 @@ struct HistoryView: View {
                                 }
                             }
                         } header: {
-                            HStack {
-                                Text(formattedDate(goal.date))
-                                Spacer()
-                                Text("\(goal.totalConsumedCalories) / \(goal.targetCalories) kcal")
-                                    .font(.subheadline)
-                                    .textCase(nil)
-                            }
+                            HistoryDayHeaderView(
+                                dateTitle: formattedDate(goal.date),
+                                consumedCalories: goal.totalConsumedCalories,
+                                targetCalories: goal.targetCalories,
+                                isPastDay: isPastDay(goal.date)
+                            )
                         }
                     }
                 }
             }
             .navigationTitle("History")
+            .onAppear {
+                refreshTotals()
+            }
         }
     }
     
@@ -52,6 +56,18 @@ struct HistoryView: View {
         formatter.timeStyle = .none
         formatter.doesRelativeDateFormatting = true
         return formatter.string(from: date)
+    }
+
+    private func isPastDay(_ date: Date) -> Bool {
+        calendar.startOfDay(for: date) < calendar.startOfDay(for: Date())
+    }
+
+    private func refreshTotals() {
+        for goal in dailyGoals {
+            goal.recalculateTotalConsumedCalories()
+        }
+
+        try? modelContext.save()
     }
     
     private func deleteFoodItems(from goal: DailyGoal, sortedItems: [FoodItem], at offsets: IndexSet) {
@@ -66,6 +82,56 @@ struct HistoryView: View {
         
         goal.recalculateTotalConsumedCalories()
         try? modelContext.save()
+    }
+}
+
+private struct HistoryDayHeaderView: View {
+    let dateTitle: String
+    let consumedCalories: Int
+    let targetCalories: Int
+    let isPastDay: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(dateTitle)
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text("\(consumedCalories) / \(targetCalories) kcal")
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: progress)
+                    .tint(consumedCalories > targetCalories ? .orange : .green)
+
+                Text(descriptionText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
+            }
+        }
+        .textCase(nil)
+        .padding(.vertical, 4)
+    }
+
+    private var progress: Double {
+        guard targetCalories > 0 else {
+            return 0
+        }
+
+        return min(Double(consumedCalories) / Double(targetCalories), 1)
+    }
+
+    private var descriptionText: String {
+        if isPastDay {
+            return "Consumed \(consumedCalories) of \(targetCalories) kcal that day."
+        }
+
+        return "Consumed \(consumedCalories) of \(targetCalories) kcal today."
     }
 }
 
