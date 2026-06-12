@@ -1,0 +1,87 @@
+workflows:
+  ios-simulator-build:
+    name: iOS Simulator Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        XCODE_PROJECT: "CalorieTracker.xcodeproj"
+        XCODE_SCHEME: "CalorieTracker"
+      xcode: latest
+    scripts:
+      - name: Verify Xcode project exists
+        script: |
+          if [ ! -d "$CM_BUILD_DIR/$XCODE_PROJECT" ]; then
+            echo "Missing $XCODE_PROJECT."
+            echo "Create an iOS Xcode project named CalorieTracker, add these Swift files to its app target, then commit the .xcodeproj."
+            exit 1
+          fi
+      - name: Build app for iOS Simulator
+        script: |
+          xcodebuild build \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+  ios-testflight:
+    name: iOS TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: "com.yourname.calorietracker"
+      vars:
+        BUNDLE_ID: "com.yourname.calorietracker"
+        XCODE_PROJECT: "CalorieTracker.xcodeproj"
+        XCODE_SCHEME: "CalorieTracker"
+        APP_STORE_APPLE_ID: "0000000000"
+      xcode: latest
+    scripts:
+      - name: Verify Xcode project exists
+        script: |
+          if [ ! -d "$CM_BUILD_DIR/$XCODE_PROJECT" ]; then
+            echo "Missing $XCODE_PROJECT."
+            echo "Create an iOS Xcode project named CalorieTracker, add these Swift files to its app target, then commit the .xcodeproj."
+            exit 1
+          fi
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Increment build number
+        script: |
+          cd "$CM_BUILD_DIR"
+          if [ "$APP_STORE_APPLE_ID" = "0000000000" ]; then
+            echo "Replace APP_STORE_APPLE_ID with the Apple ID from App Store Connect > App Information."
+            exit 1
+          fi
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || echo 0)
+          agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
+      - name: Build IPA for distribution
+        script: |
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      email:
+        recipients:
+          - "your-email@example.com"
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
