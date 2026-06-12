@@ -9,13 +9,15 @@ workflows:
         XCODE_SCHEME: "CalorieTracker"
       xcode: latest
     scripts:
-      - name: Verify Xcode project exists
+      - name: Install XcodeGen
         script: |
-          if [ ! -d "$CM_BUILD_DIR/$XCODE_PROJECT" ]; then
-            echo "Missing $XCODE_PROJECT."
-            echo "Create an iOS Xcode project named CalorieTracker, add these Swift files to its app target, then commit the .xcodeproj."
-            exit 1
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
           fi
+      - name: Generate Xcode project
+        script: |
+          cd "$CM_BUILD_DIR"
+          xcodegen generate --spec project.yml
       - name: Build app for iOS Simulator
         script: |
           xcodebuild build \
@@ -38,21 +40,23 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: "com.yourname.calorietracker"
+        bundle_identifier: "com.artiom.calorietracker"
       vars:
-        BUNDLE_ID: "com.yourname.calorietracker"
+        BUNDLE_ID: "com.artiom.calorietracker"
         XCODE_PROJECT: "CalorieTracker.xcodeproj"
         XCODE_SCHEME: "CalorieTracker"
         APP_STORE_APPLE_ID: "0000000000"
       xcode: latest
     scripts:
-      - name: Verify Xcode project exists
+      - name: Install XcodeGen
         script: |
-          if [ ! -d "$CM_BUILD_DIR/$XCODE_PROJECT" ]; then
-            echo "Missing $XCODE_PROJECT."
-            echo "Create an iOS Xcode project named CalorieTracker, add these Swift files to its app target, then commit the .xcodeproj."
-            exit 1
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
           fi
+      - name: Generate Xcode project
+        script: |
+          cd "$CM_BUILD_DIR"
+          xcodegen generate --spec project.yml
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
       - name: Increment build number
