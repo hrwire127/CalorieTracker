@@ -153,8 +153,8 @@ private struct DashboardSummaryView: View {
 
             HStack(spacing: 12) {
                 CalorieMetricView(
-                    title: "Remaining Calories",
-                    value: viewModel.remainingCalories,
+                    title: "Consumed Calories",
+                    value: viewModel.consumedCalories,
                     tint: viewModel.isOverGoal ? .red : .green
                 )
 
