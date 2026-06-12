@@ -18,35 +18,28 @@ final class NetworkManager {
     }
 
     func estimateCalories(fromBase64Image base64Image: String) async throws -> NutritionEstimate {
-        let apiKey = OpenAIConfiguration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty, apiKey != "YOUR_API_KEY" else {
+        let apiKey = GeminiConfiguration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else {
             throw NetworkManagerError.missingAPIKey
         }
 
-        var request = URLRequest(url: OpenAIConfiguration.chatCompletionsURL)
+        var request = URLRequest(url: GeminiConfiguration.generateContentURL(apiKey: apiKey))
         request.httpMethod = "POST"
         request.timeoutInterval = 45
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
-        let imageDataURL = "data:image/jpeg;base64,\(base64Image)"
-        let requestBody = OpenAIChatCompletionRequest(
-            model: OpenAIConfiguration.visionModel,
-            messages: [
-                OpenAIChatMessage(
-                    role: "system",
-                    content: .text(OpenAIConfiguration.nutritionistSystemPrompt)
-                ),
-                OpenAIChatMessage(
+        let requestBody = GeminiRequest(
+            contents: [
+                GeminiContent(
                     role: "user",
-                    content: .parts([
-                        .text("Analyze this food image."),
-                        .image(dataURL: imageDataURL)
-                    ])
+                    parts: [
+                        GeminiPart(text: GeminiConfiguration.nutritionistSystemPrompt),
+                        GeminiPart(text: "Analyze this food image."),
+                        GeminiPart(inlineData: GeminiInlineData(mimeType: "image/jpeg", data: base64Image))
+                    ]
                 )
             ],
-            maxCompletionTokens: 120,
-            responseFormat: OpenAIResponseFormat(type: "json_object")
+            generationConfig: GeminiGenerationConfig(responseMimeType: "application/json")
         )
         request.httpBody = try encoder.encode(requestBody)
 
@@ -64,27 +57,21 @@ final class NetworkManager {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            if let apiError = try? decoder.decode(OpenAIErrorResponse.self, from: data) {
+            if let apiError = try? decoder.decode(GeminiErrorResponse.self, from: data) {
                 throw NetworkManagerError.apiError(apiError.error.message)
             }
 
-            throw NetworkManagerError.apiError("OpenAI request failed with status code \(httpResponse.statusCode).")
+            throw NetworkManagerError.apiError("Gemini request failed with status code \(httpResponse.statusCode).")
         }
 
-        let completion = try decoder.decode(OpenAIChatCompletionResponse.self, from: data)
-        let message = completion.choices.first?.message
-
-        if let refusal = message?.refusal,
-           !refusal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw NetworkManagerError.apiError(refusal)
-        }
-
-        guard let content = message?.content,
-              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let completion = try decoder.decode(GeminiResponse.self, from: data)
+        guard let candidate = completion.candidates.first,
+              let contentPart = candidate.content.parts.first?.text,
+              !contentPart.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NetworkManagerError.emptyResponse
         }
 
-        let estimate = try decodeNutritionEstimate(from: content)
+        let estimate = try decodeNutritionEstimate(from: contentPart)
         guard !estimate.foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               estimate.estimatedCalories > 0 else {
             throw NetworkManagerError.invalidEstimate
@@ -134,7 +121,7 @@ enum NetworkManagerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "Replace YOUR_API_KEY in OpenAIConfiguration before using AI analysis."
+            return "Please enter a valid Gemini API Key in the Settings."
         case .invalidResponse:
             return "The server returned an invalid response."
         case .emptyResponse:
@@ -151,94 +138,52 @@ enum NetworkManagerError: LocalizedError {
     }
 }
 
-private struct OpenAIChatCompletionRequest: Encodable {
-    let model: String
-    let messages: [OpenAIChatMessage]
-    let maxCompletionTokens: Int
-    let responseFormat: OpenAIResponseFormat
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case messages
-        case maxCompletionTokens = "max_completion_tokens"
-        case responseFormat = "response_format"
-    }
+private struct GeminiRequest: Encodable {
+    let contents: [GeminiContent]
+    let generationConfig: GeminiGenerationConfig?
 }
 
-private struct OpenAIChatMessage: Encodable {
+private struct GeminiGenerationConfig: Encodable {
+    let responseMimeType: String
+}
+
+private struct GeminiContent: Encodable {
     let role: String
-    let content: Content
-
-    enum Content: Encodable {
-        case text(String)
-        case parts([OpenAIContentPart])
-
-        func encode(to encoder: Encoder) throws {
-            switch self {
-            case .text(let text):
-                var container = encoder.singleValueContainer()
-                try container.encode(text)
-            case .parts(let parts):
-                var container = encoder.singleValueContainer()
-                try container.encode(parts)
-            }
-        }
-    }
+    let parts: [GeminiPart]
 }
 
-private struct OpenAIContentPart: Encodable {
-    let type: String
+private struct GeminiPart: Encodable {
     let text: String?
-    let imageURL: OpenAIImageURL?
-
-    enum CodingKeys: String, CodingKey {
-        case type
-        case text
-        case imageURL = "image_url"
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(text, forKey: .text)
-        try container.encodeIfPresent(imageURL, forKey: .imageURL)
-    }
-
-    static func text(_ text: String) -> OpenAIContentPart {
-        OpenAIContentPart(type: "text", text: text, imageURL: nil)
-    }
-
-    static func image(dataURL: String) -> OpenAIContentPart {
-        OpenAIContentPart(
-            type: "image_url",
-            text: nil,
-            imageURL: OpenAIImageURL(url: dataURL)
-        )
+    let inlineData: GeminiInlineData?
+    
+    init(text: String? = nil, inlineData: GeminiInlineData? = nil) {
+        self.text = text
+        self.inlineData = inlineData
     }
 }
 
-private struct OpenAIImageURL: Encodable {
-    let url: String
+private struct GeminiInlineData: Encodable {
+    let mimeType: String
+    let data: String
 }
 
-private struct OpenAIResponseFormat: Encodable {
-    let type: String
+private struct GeminiResponse: Decodable {
+    let candidates: [GeminiCandidate]
 }
 
-private struct OpenAIChatCompletionResponse: Decodable {
-    let choices: [Choice]
-
-    struct Choice: Decodable {
-        let message: Message
-    }
-
-    struct Message: Decodable {
-        let content: String?
-        let refusal: String?
-    }
+private struct GeminiCandidate: Decodable {
+    let content: GeminiResponseContent
 }
 
-private struct OpenAIErrorResponse: Decodable {
+private struct GeminiResponseContent: Decodable {
+    let parts: [GeminiResponsePart]
+}
+
+private struct GeminiResponsePart: Decodable {
+    let text: String
+}
+
+private struct GeminiErrorResponse: Decodable {
     let error: APIError
 
     struct APIError: Decodable {
