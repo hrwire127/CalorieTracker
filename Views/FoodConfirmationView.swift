@@ -8,18 +8,26 @@ struct FoodConfirmationView: View {
     @State private var foodName: String
     @State private var caloriesText: String
     @State private var gramsText: String
+    @State private var proteinText: String
+    @State private var carbText: String
+    @State private var fatText: String
+    @State private var healthScoreText: String
     @State private var validationMessage: String?
 
     private let imageData: Data?
-    private let onSave: (String, Int, Int?, Data?) -> Void
+    private let onSave: (String, Int, Int?, Int?, Int?, Int?, Int?, Data?) -> Void
 
     init(
         draft: FoodEstimateDraft,
-        onSave: @escaping (String, Int, Int?, Data?) -> Void
+        onSave: @escaping (String, Int, Int?, Int?, Int?, Int?, Int?, Data?) -> Void
     ) {
         _foodName = State(initialValue: draft.foodName)
         _caloriesText = State(initialValue: "\(draft.calories)")
         _gramsText = State(initialValue: draft.grams.map { String($0) } ?? "")
+        _proteinText = State(initialValue: draft.proteinGrams.map { String($0) } ?? "")
+        _carbText = State(initialValue: draft.carbGrams.map { String($0) } ?? "")
+        _fatText = State(initialValue: draft.fatGrams.map { String($0) } ?? "")
+        _healthScoreText = State(initialValue: draft.healthScore.map { String($0) } ?? "")
         self.imageData = draft.imageData
         self.onSave = onSave
     }
@@ -52,6 +60,28 @@ struct FoodConfirmationView: View {
                     TextField("Grams (Optional)", text: $gramsText)
                         .keyboardType(.numberPad)
                         .focused($focusedField, equals: .grams)
+
+                    if let caloriesPerGram {
+                        LabeledContent("Calories per gram", value: caloriesPerGram.formatted(.number.precision(.fractionLength(2))))
+                    }
+                }
+
+                Section("Nutrition Estimate") {
+                    TextField("Protein (g)", text: $proteinText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .protein)
+
+                    TextField("Carbs (g)", text: $carbText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .carbs)
+
+                    TextField("Fat (g)", text: $fatText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .fat)
+
+                    TextField("Health Score 1-10", text: $healthScoreText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .healthScore)
                 }
 
                 if let validationMessage {
@@ -88,7 +118,11 @@ struct FoodConfirmationView: View {
         FoodEntryValidator.canSave(
             name: foodName,
             caloriesText: caloriesText,
-            gramsText: gramsText
+            gramsText: gramsText,
+            proteinText: proteinText,
+            carbText: carbText,
+            fatText: fatText,
+            healthScoreText: healthScoreText
         )
     }
 
@@ -97,18 +131,44 @@ struct FoodConfirmationView: View {
             let entry = try FoodEntryValidator.validate(
                 name: foodName,
                 caloriesText: caloriesText,
-                gramsText: gramsText
+                gramsText: gramsText,
+                proteinText: proteinText,
+                carbText: carbText,
+                fatText: fatText,
+                healthScoreText: healthScoreText
             )
-            onSave(entry.name, entry.calories, entry.grams, imageData)
+            onSave(
+                entry.name,
+                entry.calories,
+                entry.grams,
+                entry.proteinGrams,
+                entry.carbGrams,
+                entry.fatGrams,
+                entry.healthScore,
+                imageData
+            )
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
         }
     }
 
+    private var caloriesPerGram: Double? {
+        guard let calories = Int(caloriesText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let grams = Int(gramsText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+
+        return NutritionCalculator.caloriesPerGram(calories: calories, grams: grams)
+    }
+
     private enum Field: Hashable {
         case name
         case calories
         case grams
+        case protein
+        case carbs
+        case fat
+        case healthScore
     }
 }

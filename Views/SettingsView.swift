@@ -9,6 +9,8 @@ struct SettingsView: View {
     @AppStorage("ProfileHeightCm") private var profileHeightCm: String = ""
     @AppStorage("ProfileAbout") private var profileAbout: String = ""
     @AppStorage("ProfileBirthDateTimestamp") private var profileBirthDateTimestamp: Double = 631_152_000
+    @AppStorage("ProfileSex") private var profileSex = ProfileSex.unspecified.rawValue
+    @AppStorage("ProfileActivityLevel") private var profileActivityLevel = ActivityLevel.sedentary.rawValue
     @AppStorage("ProfileImageData") private var profileImageData: Data = Data()
     @AppStorage("AppThemePreference") private var appThemePreference = AppThemePreference.system.rawValue
 
@@ -79,6 +81,24 @@ struct SettingsView: View {
                 displayedComponents: .date
             )
 
+            Picker("Sex", selection: $profileSex) {
+                ForEach(ProfileSex.allCases) { sex in
+                    Text(sex.title)
+                        .tag(sex.rawValue)
+                }
+            }
+
+            Picker("Activity", selection: $profileActivityLevel) {
+                ForEach(ActivityLevel.allCases) { activityLevel in
+                    Text(activityLevel.title)
+                        .tag(activityLevel.rawValue)
+                }
+            }
+
+            if let maintenanceCalories {
+                LabeledContent("Maintenance", value: "\(maintenanceCalories) kcal/day")
+            }
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("About Me")
                     .foregroundStyle(.secondary)
@@ -141,6 +161,16 @@ struct SettingsView: View {
         } set: { newDate in
             profileBirthDateTimestamp = newDate.timeIntervalSince1970
         }
+    }
+
+    private var maintenanceCalories: Int? {
+        NutritionCalculator.maintenanceCalories(
+            weightKgText: profileWeightKg,
+            heightCmText: profileHeightCm,
+            birthDateTimestamp: profileBirthDateTimestamp,
+            sexRawValue: profileSex,
+            activityRawValue: profileActivityLevel
+        )
     }
 
     @MainActor

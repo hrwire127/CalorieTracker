@@ -46,6 +46,10 @@ final class AICameraEntryViewModel: ObservableObject {
                 foodName: estimate.foodName,
                 calories: estimate.estimatedCalories,
                 grams: estimate.estimatedGrams,
+                proteinGrams: estimate.estimatedProteinGrams,
+                carbGrams: estimate.estimatedCarbGrams,
+                fatGrams: estimate.estimatedFatGrams,
+                healthScore: estimate.healthScore,
                 imageData: compressedData
             )
         } catch {

@@ -68,33 +68,45 @@ struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $isShowingManualEntry) {
-                ManualEntryView { name, calories, grams, imageData in
+                ManualEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
                         name: name,
                         calories: calories,
                         grams: grams,
+                        proteinGrams: protein,
+                        carbGrams: carbs,
+                        fatGrams: fat,
+                        healthScore: healthScore,
                         imageData: imageData,
                         using: modelContext
                     )
                 }
             }
             .sheet(isPresented: $isShowingAIEntry) {
-                AICameraEntryView { name, calories, grams, imageData in
+                AICameraEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
                         name: name,
                         calories: calories,
                         grams: grams,
+                        proteinGrams: protein,
+                        carbGrams: carbs,
+                        fatGrams: fat,
+                        healthScore: healthScore,
                         imageData: imageData,
                         using: modelContext
                     )
                 }
             }
             .sheet(isPresented: $isShowingGoalEditor) {
-                GoalEditorView(initialGoal: viewModel.targetCalories) { targetCalories in
-                    viewModel.updateDailyGoal(
-                        targetCalories: targetCalories,
-                        using: modelContext
+                GoalEditorView(
+                    initialTargets: DailyGoalTargets(
+                        calories: viewModel.targetCalories,
+                        proteinGrams: viewModel.targetProteinGrams,
+                        carbGrams: viewModel.targetCarbGrams,
+                        fatGrams: viewModel.targetFatGrams
                     )
+                ) { targets in
+                    viewModel.updateDailyGoal(targets: targets, using: modelContext)
                 }
             }
             .alert("Calorie Tracker", isPresented: errorBinding) {
@@ -150,6 +162,29 @@ private struct DashboardSummaryView: View {
                     title: viewModel.isOverGoal ? "Over Goal" : "Daily Goal",
                     value: viewModel.isOverGoal ? viewModel.overageCalories : viewModel.targetCalories,
                     tint: viewModel.isOverGoal ? .red : .blue
+                )
+            }
+
+            VStack(spacing: 10) {
+                MacroProgressRowView(
+                    title: "Protein",
+                    consumed: viewModel.consumedProteinGrams,
+                    target: viewModel.targetProteinGrams,
+                    tint: .purple
+                )
+
+                MacroProgressRowView(
+                    title: "Carbs",
+                    consumed: viewModel.consumedCarbGrams,
+                    target: viewModel.targetCarbGrams,
+                    tint: .blue
+                )
+
+                MacroProgressRowView(
+                    title: "Fat",
+                    consumed: viewModel.consumedFatGrams,
+                    target: viewModel.targetFatGrams,
+                    tint: .orange
                 )
             }
         }
@@ -236,6 +271,40 @@ private struct CalorieMetricView: View {
     }
 }
 
+private struct MacroProgressRowView: View {
+    let title: String
+    let consumed: Int
+    let target: Int
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+
+                Spacer()
+
+                Text("\(consumed) / \(target) g")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            ProgressView(value: progress)
+                .tint(tint)
+        }
+    }
+
+    private var progress: Double {
+        guard target > 0 else {
+            return 0
+        }
+
+        return min(Double(consumed) / Double(target), 1)
+    }
+}
+
 private struct FoodItemRowView: View {
     let item: FoodItem
 
@@ -251,14 +320,28 @@ private struct FoodItemRowView: View {
                 Text(itemDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if !macroDescription.isEmpty {
+                    Text(macroDescription)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer(minLength: 12)
 
-            Text("\(item.calories) kcal")
-                .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("\(item.calories) kcal")
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+
+                if let healthScore = item.healthScore {
+                    Text("\(healthScore)/10")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(healthScore >= 7 ? .green : .orange)
+                }
+            }
         }
         .padding(.vertical, 4)
     }
@@ -280,10 +363,34 @@ private struct FoodItemRowView: View {
 
     private var itemDescription: String {
         let time = item.timestamp.formatted(date: .omitted, time: .shortened)
-        guard let grams = item.grams else {
-            return time
+        var details = [time]
+
+        if let grams = item.grams {
+            details.append("\(grams) g")
         }
 
-        return "\(time) - \(grams) g"
+        if let caloriesPerGram = item.caloriesPerGram {
+            details.append("\(caloriesPerGram.formatted(.number.precision(.fractionLength(2)))) kcal/g")
+        }
+
+        return details.joined(separator: " - ")
+    }
+
+    private var macroDescription: String {
+        var parts: [String] = []
+
+        if let protein = item.proteinGrams {
+            parts.append("P \(protein)g")
+        }
+
+        if let carbs = item.carbGrams {
+            parts.append("C \(carbs)g")
+        }
+
+        if let fat = item.fatGrams {
+            parts.append("F \(fat)g")
+        }
+
+        return parts.joined(separator: " - ")
     }
 }

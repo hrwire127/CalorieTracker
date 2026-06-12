@@ -9,7 +9,7 @@ struct AICameraEntryView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isShowingCamera = false
 
-    let onSave: (String, Int, Int?, Data?) -> Void
+    let onSave: (String, Int, Int?, Int?, Int?, Int?, Int?, Data?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -72,8 +72,8 @@ struct AICameraEntryView: View {
                 .ignoresSafeArea()
             }
             .sheet(item: $viewModel.pendingDraft) { draft in
-                FoodConfirmationView(draft: draft) { name, calories, grams, imageData in
-                    onSave(name, calories, grams, imageData)
+                FoodConfirmationView(draft: draft) { name, calories, grams, protein, carbs, fat, healthScore, imageData in
+                    onSave(name, calories, grams, protein, carbs, fat, healthScore, imageData)
                     viewModel.pendingDraft = nil
                     dismiss()
                 }

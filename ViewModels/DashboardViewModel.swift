@@ -18,8 +18,38 @@ final class DashboardViewModel: ObservableObject {
         dailyGoal?.targetCalories ?? 2_000
     }
 
+    var targetProteinGrams: Int {
+        dailyGoal?.targetProteinGrams ?? 100
+    }
+
+    var targetCarbGrams: Int {
+        dailyGoal?.targetCarbGrams ?? DailyGoal.defaultCarbGoal(calories: targetCalories)
+    }
+
+    var targetFatGrams: Int {
+        dailyGoal?.targetFatGrams ?? 100
+    }
+
     var consumedCalories: Int {
         dailyGoal?.totalConsumedCalories ?? 0
+    }
+
+    var consumedProteinGrams: Int {
+        foodItems.reduce(0) { total, item in
+            total + (item.proteinGrams ?? 0)
+        }
+    }
+
+    var consumedCarbGrams: Int {
+        foodItems.reduce(0) { total, item in
+            total + (item.carbGrams ?? 0)
+        }
+    }
+
+    var consumedFatGrams: Int {
+        foodItems.reduce(0) { total, item in
+            total + (item.fatGrams ?? 0)
+        }
     }
 
     var remainingCalories: Int {
@@ -58,12 +88,24 @@ final class DashboardViewModel: ObservableObject {
         name: String,
         calories: Int,
         grams: Int? = nil,
+        proteinGrams: Int? = nil,
+        carbGrams: Int? = nil,
+        fatGrams: Int? = nil,
+        healthScore: Int? = nil,
         imageData: Data? = nil,
         using modelContext: ModelContext
     ) {
         let entry: ValidatedFoodEntry
         do {
-            entry = try FoodEntryValidator.validate(name: name, calories: calories, grams: grams)
+            entry = try FoodEntryValidator.validate(
+                name: name,
+                calories: calories,
+                grams: grams,
+                proteinGrams: proteinGrams,
+                carbGrams: carbGrams,
+                fatGrams: fatGrams,
+                healthScore: healthScore
+            )
         } catch {
             errorMessage = error.localizedDescription
             return
@@ -75,6 +117,10 @@ final class DashboardViewModel: ObservableObject {
                 name: entry.name,
                 calories: entry.calories,
                 grams: entry.grams,
+                proteinGrams: entry.proteinGrams,
+                carbGrams: entry.carbGrams,
+                fatGrams: entry.fatGrams,
+                healthScore: entry.healthScore,
                 timestamp: Date(),
                 imageData: imageData, // the uploaded or generated image data
                 dailyGoal: goal
@@ -97,15 +143,23 @@ final class DashboardViewModel: ObservableObject {
         }
     }
 
-    func updateDailyGoal(targetCalories: Int, using modelContext: ModelContext) {
-        guard targetCalories > 0 else {
+    func updateDailyGoal(targets: DailyGoalTargets, using modelContext: ModelContext) {
+        guard targets.calories > 0 else {
             errorMessage = "Daily goal must be greater than zero."
+            return
+        }
+
+        guard targets.proteinGrams >= 0, targets.carbGrams >= 0, targets.fatGrams >= 0 else {
+            errorMessage = "Macro goals must be zero or greater."
             return
         }
 
         do {
             let goal = try fetchOrCreateTodayGoal(in: modelContext)
-            goal.targetCalories = targetCalories
+            goal.targetCalories = targets.calories
+            goal.targetProteinGrams = targets.proteinGrams
+            goal.targetCarbGrams = targets.carbGrams
+            goal.targetFatGrams = targets.fatGrams
             goal.recalculateTotalConsumedCalories()
 
             try modelContext.save()

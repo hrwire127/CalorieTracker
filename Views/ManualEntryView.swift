@@ -8,12 +8,16 @@ struct ManualEntryView: View {
     @State private var foodName = ""
     @State private var caloriesText = ""
     @State private var gramsText = ""
+    @State private var proteinText = ""
+    @State private var carbText = ""
+    @State private var fatText = ""
+    @State private var healthScoreText = ""
     @State private var validationMessage: String?
     
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImageData: Data? = nil
 
-    let onSave: (String, Int, Int?, Data?) -> Void
+    let onSave: (String, Int, Int?, Int?, Int?, Int?, Int?, Data?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -30,6 +34,28 @@ struct ManualEntryView: View {
                     TextField("Grams (Optional)", text: $gramsText)
                         .keyboardType(.numberPad)
                         .focused($focusedField, equals: .grams)
+
+                    if let caloriesPerGram {
+                        LabeledContent("Calories per gram", value: caloriesPerGram.formatted(.number.precision(.fractionLength(2))))
+                    }
+                }
+
+                Section("Nutrition (Optional)") {
+                    TextField("Protein (g)", text: $proteinText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .protein)
+
+                    TextField("Carbs (g)", text: $carbText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .carbs)
+
+                    TextField("Fat (g)", text: $fatText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .fat)
+
+                    TextField("Health Score 1-10", text: $healthScoreText)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .healthScore)
                 }
                 
                 Section("Image (Optional)") {
@@ -108,7 +134,11 @@ struct ManualEntryView: View {
         FoodEntryValidator.canSave(
             name: foodName,
             caloriesText: caloriesText,
-            gramsText: gramsText
+            gramsText: gramsText,
+            proteinText: proteinText,
+            carbText: carbText,
+            fatText: fatText,
+            healthScoreText: healthScoreText
         )
     }
 
@@ -117,18 +147,44 @@ struct ManualEntryView: View {
             let entry = try FoodEntryValidator.validate(
                 name: foodName,
                 caloriesText: caloriesText,
-                gramsText: gramsText
+                gramsText: gramsText,
+                proteinText: proteinText,
+                carbText: carbText,
+                fatText: fatText,
+                healthScoreText: healthScoreText
             )
-            onSave(entry.name, entry.calories, entry.grams, selectedImageData)
+            onSave(
+                entry.name,
+                entry.calories,
+                entry.grams,
+                entry.proteinGrams,
+                entry.carbGrams,
+                entry.fatGrams,
+                entry.healthScore,
+                selectedImageData
+            )
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
         }
     }
 
+    private var caloriesPerGram: Double? {
+        guard let calories = Int(caloriesText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let grams = Int(gramsText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+
+        return NutritionCalculator.caloriesPerGram(calories: calories, grams: grams)
+    }
+
     private enum Field: Hashable {
         case name
         case calories
         case grams
+        case protein
+        case carbs
+        case fat
+        case healthScore
     }
 }
