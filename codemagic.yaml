@@ -40,6 +40,73 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
+  ios-unsigned-device-ipa:
+    name: iOS Unsigned Device IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        XCODE_PROJECT: "CalorieTracker.xcodeproj"
+        XCODE_SCHEME: "CalorieTracker"
+      xcode: latest
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Generate Xcode project
+        script: |
+          cd "$CM_BUILD_DIR"
+          xcodegen generate --spec project.yml
+      - name: Build unsigned app for physical iPhone
+        script: |
+          mkdir -p /tmp/xcodebuild_logs
+          xcodebuild -version
+          DERIVED_DATA_PATH="$CM_BUILD_DIR/build/DerivedData"
+          set +e
+          xcodebuild build \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild_logs/unsigned-device-build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "---- Relevant build errors ----"
+            grep -nE "error:|fatal error:|No such module|cannot find|failed|Signing|Provisioning" /tmp/xcodebuild_logs/unsigned-device-build.log | tail -100 || true
+            exit $BUILD_STATUS
+          fi
+      - name: Package unsigned IPA
+        script: |
+          APP_PATH=$(find "$CM_BUILD_DIR/build/DerivedData/Build/Products/Release-iphoneos" -maxdepth 2 -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Could not find built .app in Release-iphoneos."
+            find "$CM_BUILD_DIR/build/DerivedData/Build/Products" -maxdepth 4 -print || true
+            exit 1
+          fi
+
+          IPA_DIR="$CM_BUILD_DIR/build/ios/unsigned"
+          PAYLOAD_DIR="$IPA_DIR/Payload"
+          mkdir -p "$PAYLOAD_DIR"
+          rm -rf "$PAYLOAD_DIR"/*.app
+          cp -R "$APP_PATH" "$PAYLOAD_DIR/"
+
+          cd "$IPA_DIR"
+          zip -qry CalorieTracker-unsigned.ipa Payload
+          echo "Created $IPA_DIR/CalorieTracker-unsigned.ipa"
+    artifacts:
+      - build/ios/unsigned/*.ipa
+      - build/ios/unsigned/Payload/*.app
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
   ios-testflight:
     name: iOS TestFlight
     max_build_duration: 120
