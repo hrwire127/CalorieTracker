@@ -36,6 +36,9 @@ struct SettingsView: View {
                 apiSection
             }
             .navigationTitle("Settings")
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 92)
+            }
             .onChange(of: selectedProfilePhoto) { _, newItem in
                 guard let newItem else {
                     return

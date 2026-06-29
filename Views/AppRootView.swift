@@ -5,59 +5,30 @@ struct AppRootView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("AppThemePreference") private var appThemePreference = AppThemePreference.system.rawValue
     @State private var isShowingAIEntry = false
+    @State private var selectedTab: RootTab = .dashboard
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            TabView {
+            TabView(selection: $selectedTab) {
                 DashboardView()
-                    .tabItem {
-                        Label("Today", systemImage: "fork.knife")
-                    }
+                    .tag(RootTab.dashboard)
 
                 HistoryView()
-                    .tabItem {
-                        Label("History", systemImage: "calendar.badge.clock")
-                    }
+                    .tag(RootTab.history)
 
                 StatisticsView()
-                    .tabItem {
-                        Label("Stats", systemImage: "chart.bar.xaxis")
-                    }
+                    .tag(RootTab.stats)
 
                 SettingsView()
-                    .tabItem {
-                        Label("Settings", systemImage: "gear")
-                    }
+                    .tag(RootTab.settings)
             }
+            .toolbar(.hidden, for: .tabBar)
 
-            Button {
+            CustomTabBar(selectedTab: $selectedTab) {
                 isShowingAIEntry = true
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.teal, .blue],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: .blue.opacity(0.30), radius: 18, x: 0, y: 8)
-
-                    Text("=")
-                        .font(.system(size: 36, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .offset(y: -1)
-                }
-                .frame(width: 76, height: 76)
-                .overlay {
-                    Circle()
-                        .strokeBorder(.white.opacity(0.92), lineWidth: 5)
-                }
             }
-            .accessibilityLabel("AI Scan")
-            .padding(.bottom, 20)
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .preferredColorScheme(selectedTheme.colorScheme)
         .sheet(isPresented: $isShowingAIEntry) {
             AICameraEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
@@ -165,4 +136,115 @@ struct AppRootView: View {
 
 extension Notification.Name {
     static let foodItemsDidChange = Notification.Name("foodItemsDidChange")
+}
+
+private enum RootTab: CaseIterable, Hashable {
+    case dashboard
+    case history
+    case stats
+    case settings
+
+    var title: String {
+        switch self {
+        case .dashboard:
+            return "Dashboard"
+        case .history:
+            return "History"
+        case .stats:
+            return "Insights"
+        case .settings:
+            return "Settings"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .dashboard:
+            return "house"
+        case .history:
+            return "calendar.badge.clock"
+        case .stats:
+            return "waveform.path.ecg"
+        case .settings:
+            return "gearshape"
+        }
+    }
+
+    var selectedSystemImage: String {
+        switch self {
+        case .dashboard:
+            return "house.fill"
+        case .history:
+            return "calendar.badge.clock"
+        case .stats:
+            return "waveform.path.ecg"
+        case .settings:
+            return "gearshape.fill"
+        }
+    }
+}
+
+private struct CustomTabBar: View {
+    @Binding var selectedTab: RootTab
+    let onPlusTap: () -> Void
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 0)
+                .fill(.bar)
+                .frame(height: 92)
+                .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: -5)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+
+            HStack(alignment: .bottom, spacing: 0) {
+                tabButton(.dashboard)
+                tabButton(.history)
+
+                Color.clear
+                    .frame(maxWidth: .infinity)
+
+                tabButton(.stats)
+                tabButton(.settings)
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 6)
+
+            Button(action: onPlusTap) {
+                ZStack {
+                    Circle()
+                        .fill(Color.primary)
+                        .shadow(color: .black.opacity(0.26), radius: 16, x: 0, y: 8)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(Color(.systemBackground))
+                }
+                .frame(width: 84, height: 84)
+            }
+            .accessibilityLabel("AI Scan")
+            .offset(y: -24)
+        }
+        .frame(height: 112)
+        .frame(maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private func tabButton(_ tab: RootTab) -> some View {
+        Button {
+            selectedTab = tab
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: selectedTab == tab ? tab.selectedSystemImage : tab.systemImage)
+                    .font(.system(size: 25, weight: .semibold))
+
+                Text(tab.title)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(selectedTab == tab ? Color.primary : Color.secondary.opacity(0.62))
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+        }
+        .buttonStyle(.plain)
+    }
 }

@@ -33,6 +33,9 @@ struct StatisticsView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Stats")
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 92)
+            }
             .alert("Statistics", isPresented: errorBinding) {
                 Button("OK", role: .cancel) {
                     viewModel.clearError()

@@ -44,6 +44,9 @@ struct DashboardView: View {
             .navigationTitle("Today")
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 92)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -57,7 +60,7 @@ struct DashboardView: View {
                     Button {
                         isShowingManualEntry = true
                     } label: {
-                        Label("Manual Entry", systemImage: "plus.circle.fill")
+                        Label("Manual Entry", systemImage: "square.and.pencil")
                     }
                 }
             }
