@@ -49,16 +49,29 @@ struct FoodConfirmationView: View {
                 }
 
                 Section("Estimate") {
-                    TextField("Food Name", text: $foodName)
-                        .textInputAutocapitalization(.words)
-                        .focused($focusedField, equals: .name)
+                    HStack(spacing: 10) {
+                        FieldIcon(systemName: "fork.knife", tint: .green)
+                        TextField("Food Name", text: $foodName)
+                            .textInputAutocapitalization(.words)
+                            .focused($focusedField, equals: .name)
+                    }
 
-                    TextField("Calories", text: $caloriesText)
-                        .keyboardType(.numberPad)
+                    MacroInputRow(
+                        title: "Calories",
+                        systemImage: "flame.fill",
+                        tint: .red,
+                        placeholder: "kcal",
+                        text: $caloriesText
+                    )
                         .focused($focusedField, equals: .calories)
 
-                    TextField("Grams (Optional)", text: $gramsText)
-                        .keyboardType(.numberPad)
+                    MacroInputRow(
+                        title: "Weight",
+                        systemImage: "scalemass.fill",
+                        tint: .teal,
+                        placeholder: "grams",
+                        text: $gramsText
+                    )
                         .focused($focusedField, equals: .grams)
 
                     if let caloriesPerGram {
@@ -67,20 +80,16 @@ struct FoodConfirmationView: View {
                 }
 
                 Section("Nutrition Estimate") {
-                    TextField("Protein (g)", text: $proteinText)
-                        .keyboardType(.numberPad)
+                    MacroInputRow(title: "Protein", systemImage: "bolt.fill", tint: .purple, placeholder: "g", text: $proteinText)
                         .focused($focusedField, equals: .protein)
 
-                    TextField("Carbs (g)", text: $carbText)
-                        .keyboardType(.numberPad)
+                    MacroInputRow(title: "Carbs", systemImage: "leaf.fill", tint: .blue, placeholder: "g", text: $carbText)
                         .focused($focusedField, equals: .carbs)
 
-                    TextField("Fat (g)", text: $fatText)
-                        .keyboardType(.numberPad)
+                    MacroInputRow(title: "Fat", systemImage: "drop.fill", tint: .orange, placeholder: "g", text: $fatText)
                         .focused($focusedField, equals: .fat)
 
-                    TextField("Health Score 1-10", text: $healthScoreText)
-                        .keyboardType(.numberPad)
+                    MacroInputRow(title: "Health", systemImage: "heart.fill", tint: .pink, placeholder: "1-10", text: $healthScoreText)
                         .focused($focusedField, equals: .healthScore)
                 }
 

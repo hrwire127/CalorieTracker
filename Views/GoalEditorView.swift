@@ -27,15 +27,50 @@ struct GoalEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    DietScorePanelView(
+                        score: dietScore,
+                        targetCalories: targetCalories,
+                        macroCalories: macroCalories,
+                        maintenanceCalories: maintenanceCalories,
+                        dailyDeficit: dailyDeficit
+                    )
+                }
+                .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+
                 Section("Daily Calories") {
                     Stepper(value: $targetCalories, in: 500...8_000, step: 50) {
-                        LabeledContent("Target", value: "\(targetCalories) kcal")
+                        GoalStepperLabel(
+                            title: "Target",
+                            value: "\(targetCalories) kcal",
+                            systemImage: "flame.fill",
+                            tint: .red
+                        )
                     }
 
                     if let maintenanceCalories {
-                        LabeledContent("Maintenance", value: "\(maintenanceCalories) kcal")
+                        GoalInfoRow(
+                            title: "Maintenance",
+                            value: "\(maintenanceCalories) kcal",
+                            systemImage: "speedometer",
+                            tint: .blue
+                        )
+
+                        GoalInfoRow(
+                            title: deficitTitle,
+                            value: "\(abs(dailyDeficit)) kcal/day",
+                            systemImage: dailyDeficit >= 0 ? "arrow.down.circle.fill" : "arrow.up.circle.fill",
+                            tint: dailyDeficit >= 0 ? .green : .orange
+                        )
+
+                        GoalInfoRow(
+                            title: "7-day total",
+                            value: "\(abs(dailyDeficit * 7)) kcal",
+                            systemImage: "calendar",
+                            tint: dailyDeficit >= 0 ? .green : .orange
+                        )
                     } else {
-                        Text("Complete your profile to estimate maintenance calories.")
+                        Text("Complete your profile to estimate maintenance and deficit.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -43,15 +78,15 @@ struct GoalEditorView: View {
 
                 Section("Macro Goals") {
                     Stepper(value: $targetProteinGrams, in: 0...400, step: 5) {
-                        LabeledContent("Protein", value: "\(targetProteinGrams) g")
+                        GoalStepperLabel(title: "Protein", value: "\(targetProteinGrams) g", systemImage: "bolt.fill", tint: .purple)
                     }
 
                     Stepper(value: $targetCarbGrams, in: 0...700, step: 5) {
-                        LabeledContent("Carbs", value: "\(targetCarbGrams) g")
+                        GoalStepperLabel(title: "Carbs", value: "\(targetCarbGrams) g", systemImage: "leaf.fill", tint: .blue)
                     }
 
                     Stepper(value: $targetFatGrams, in: 0...300, step: 5) {
-                        LabeledContent("Fat", value: "\(targetFatGrams) g")
+                        GoalStepperLabel(title: "Fat", value: "\(targetFatGrams) g", systemImage: "drop.fill", tint: .orange)
                     }
 
                     Button {
@@ -65,17 +100,13 @@ struct GoalEditorView: View {
                     }
                 }
 
-                Section("Diet Score") {
-                    LabeledContent("Score", value: "\(dietScore)/10")
-
-                    LabeledContent("Macro Calories", value: "\(macroCalories) kcal")
-
+                Section("Plan Notes") {
                     Text(scoreDescription)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Goal")
+            .navigationTitle("Diet Goal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -111,6 +142,18 @@ struct GoalEditorView: View {
         )
     }
 
+    private var dailyDeficit: Int {
+        guard let maintenanceCalories else {
+            return 0
+        }
+
+        return maintenanceCalories - targetCalories
+    }
+
+    private var deficitTitle: String {
+        dailyDeficit >= 0 ? "Deficit" : "Surplus"
+    }
+
     private var macroCalories: Int {
         NutritionCalculator.macroCalories(
             proteinGrams: targetProteinGrams,
@@ -132,7 +175,7 @@ struct GoalEditorView: View {
     private var scoreDescription: String {
         let calorieDifference = macroCalories - targetCalories
         if abs(calorieDifference) <= 100 {
-            return "Your macro targets are close to the calorie goal. The score also considers your profile maintenance estimate when available."
+            return "Your macro targets are close to your calorie goal. The score also considers your maintenance estimate when available."
         }
 
         if calorieDifference > 0 {
@@ -140,5 +183,113 @@ struct GoalEditorView: View {
         }
 
         return "Macro targets add up below your calorie goal. Add carbs, protein, or fat to better match the plan."
+    }
+}
+
+private struct DietScorePanelView: View {
+    let score: Int
+    let targetCalories: Int
+    let macroCalories: Int
+    let maintenanceCalories: Int?
+    let dailyDeficit: Int
+
+    var body: some View {
+        HStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.15), lineWidth: 11)
+
+                Circle()
+                    .trim(from: 0, to: Double(score) / 10)
+                    .stroke(scoreTint, style: StrokeStyle(lineWidth: 11, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 0) {
+                    Text("\(score)")
+                        .font(.system(.title, design: .rounded, weight: .bold))
+                    Text("/10")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 92, height: 92)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Diet Score")
+                    .font(.headline)
+
+                Text("Target \(targetCalories) kcal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                Text("Macros \(macroCalories) kcal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                if let maintenanceCalories {
+                    Text("Maintenance \(maintenanceCalories) kcal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+
+                    Text("\(dailyDeficit >= 0 ? "Deficit" : "Surplus") \(abs(dailyDeficit)) kcal/day")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(dailyDeficit >= 0 ? .green : .orange)
+                        .monospacedDigit()
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(scoreTint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var scoreTint: Color {
+        switch score {
+        case 8...10:
+            return .green
+        case 5...7:
+            return .orange
+        default:
+            return .red
+        }
+    }
+}
+
+private struct GoalStepperLabel: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            FieldIcon(systemName: systemImage, tint: tint)
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+}
+
+private struct GoalInfoRow: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            FieldIcon(systemName: systemImage, tint: tint)
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
     }
 }

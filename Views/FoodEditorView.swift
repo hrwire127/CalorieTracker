@@ -1,27 +1,50 @@
 import SwiftUI
-import PhotosUI
+import UIKit
 
-struct ManualEntryView: View {
+struct FoodEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedField: Field?
 
-    @State private var foodName = ""
-    @State private var caloriesText = ""
-    @State private var gramsText = ""
-    @State private var proteinText = ""
-    @State private var carbText = ""
-    @State private var fatText = ""
-    @State private var healthScoreText = ""
+    @State private var foodName: String
+    @State private var caloriesText: String
+    @State private var gramsText: String
+    @State private var proteinText: String
+    @State private var carbText: String
+    @State private var fatText: String
+    @State private var healthScoreText: String
     @State private var validationMessage: String?
-    
-    @State private var selectedItem: PhotosPickerItem? = nil
-    @State private var selectedImageData: Data? = nil
 
-    let onSave: (String, Int, Int?, Int?, Int?, Int?, Int?, Data?) -> Void
+    private let item: FoodItem
+    private let onSave: (ValidatedFoodEntry) -> Void
+
+    init(item: FoodItem, onSave: @escaping (ValidatedFoodEntry) -> Void) {
+        self.item = item
+        self.onSave = onSave
+        _foodName = State(initialValue: item.name)
+        _caloriesText = State(initialValue: "\(item.calories)")
+        _gramsText = State(initialValue: item.grams.map { String($0) } ?? "")
+        _proteinText = State(initialValue: item.proteinGrams.map { String($0) } ?? "")
+        _carbText = State(initialValue: item.carbGrams.map { String($0) } ?? "")
+        _fatText = State(initialValue: item.fatGrams.map { String($0) } ?? "")
+        _healthScoreText = State(initialValue: item.healthScore.map { String($0) } ?? "")
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                if let imageData = item.imageData,
+                   let image = UIImage(data: imageData) {
+                    Section {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 190)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+                }
+
                 Section("Food Details") {
                     HStack(spacing: 10) {
                         FieldIcon(systemName: "fork.knife", tint: .green)
@@ -37,7 +60,7 @@ struct ManualEntryView: View {
                         placeholder: "kcal",
                         text: $caloriesText
                     )
-                        .focused($focusedField, equals: .calories)
+                    .focused($focusedField, equals: .calories)
 
                     MacroInputRow(
                         title: "Weight",
@@ -46,14 +69,14 @@ struct ManualEntryView: View {
                         placeholder: "grams",
                         text: $gramsText
                     )
-                        .focused($focusedField, equals: .grams)
+                    .focused($focusedField, equals: .grams)
 
                     if let caloriesPerGram {
                         LabeledContent("Calories per gram", value: caloriesPerGram.formatted(.number.precision(.fractionLength(2))))
                     }
                 }
 
-                Section("Nutrition (Optional)") {
+                Section("Nutrition") {
                     MacroInputRow(title: "Protein", systemImage: "bolt.fill", tint: .purple, placeholder: "g", text: $proteinText)
                         .focused($focusedField, equals: .protein)
 
@@ -66,48 +89,6 @@ struct ManualEntryView: View {
                     MacroInputRow(title: "Health", systemImage: "heart.fill", tint: .pink, placeholder: "1-10", text: $healthScoreText)
                         .focused($focusedField, equals: .healthScore)
                 }
-                
-                Section("Image (Optional)") {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 12) {
-                            if let selectedImageData, let uiImage = UIImage(data: selectedImageData) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 150, height: 150)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .shadow(radius: 4)
-                            }
-                            
-                            PhotosPicker(
-                                selection: $selectedItem,
-                                matching: .images,
-                                photoLibrary: .shared()
-                            ) {
-                                Label(selectedImageData == nil ? "Add Photo" : "Change Photo", systemImage: "photo")
-                                    .font(.headline)
-                            }
-                            .onChange(of: selectedItem) { _, newItem in
-                                Task {
-                                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                                        selectedImageData = data
-                                    }
-                                }
-                            }
-                            
-                            if selectedImageData != nil {
-                                Button("Remove Photo", role: .destructive) {
-                                    selectedItem = nil
-                                    selectedImageData = nil
-                                }
-                                .font(.footnote)
-                            }
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                }
 
                 if let validationMessage {
                     Section {
@@ -117,7 +98,7 @@ struct ManualEntryView: View {
                     }
                 }
             }
-            .navigationTitle("Manual Entry")
+            .navigationTitle("Edit Food")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -132,9 +113,6 @@ struct ManualEntryView: View {
                     }
                     .disabled(!canSave)
                 }
-            }
-            .onAppear {
-                focusedField = .name
             }
         }
     }
@@ -151,6 +129,15 @@ struct ManualEntryView: View {
         )
     }
 
+    private var caloriesPerGram: Double? {
+        guard let calories = Int(caloriesText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let grams = Int(gramsText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+
+        return NutritionCalculator.caloriesPerGram(calories: calories, grams: grams)
+    }
+
     private func save() {
         do {
             let entry = try FoodEntryValidator.validate(
@@ -162,29 +149,11 @@ struct ManualEntryView: View {
                 fatText: fatText,
                 healthScoreText: healthScoreText
             )
-            onSave(
-                entry.name,
-                entry.calories,
-                entry.grams,
-                entry.proteinGrams,
-                entry.carbGrams,
-                entry.fatGrams,
-                entry.healthScore,
-                selectedImageData
-            )
+            onSave(entry)
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
         }
-    }
-
-    private var caloriesPerGram: Double? {
-        guard let calories = Int(caloriesText.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let grams = Int(gramsText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return nil
-        }
-
-        return NutritionCalculator.caloriesPerGram(calories: calories, grams: grams)
     }
 
     private enum Field: Hashable {
@@ -195,5 +164,40 @@ struct ManualEntryView: View {
         case carbs
         case fat
         case healthScore
+    }
+}
+
+struct MacroInputRow: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            FieldIcon(systemName: systemImage, tint: tint)
+
+            Text(title)
+                .foregroundStyle(.secondary)
+
+            TextField(placeholder, text: $text)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+        }
+    }
+}
+
+struct FieldIcon: View {
+    let systemName: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(tint)
+            .frame(width: 26, height: 26)
+            .background(tint.opacity(0.12), in: Circle())
     }
 }

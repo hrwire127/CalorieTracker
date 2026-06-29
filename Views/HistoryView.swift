@@ -5,6 +5,7 @@ import UIKit
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DailyGoal.date, order: .reverse) private var dailyGoals: [DailyGoal]
+    @State private var editingFoodItem: FoodItem?
     private let calendar = Calendar.current
     
     var body: some View {
@@ -27,6 +28,10 @@ struct HistoryView: View {
                             } else {
                                 ForEach(sortedItems) { item in
                                     HistoryFoodItemRowView(item: item)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            editingFoodItem = item
+                                        }
                                 }
                                 .onDelete { offsets in
                                     deleteFoodItems(from: goal, sortedItems: sortedItems, at: offsets)
@@ -46,6 +51,11 @@ struct HistoryView: View {
             .navigationTitle("History")
             .onAppear {
                 refreshTotals()
+            }
+            .sheet(item: $editingFoodItem) { item in
+                FoodEditorView(item: item) { entry in
+                    updateFoodItem(item, with: entry)
+                }
             }
         }
     }
@@ -81,6 +91,18 @@ struct HistoryView: View {
         }
         
         goal.recalculateTotalConsumedCalories()
+        try? modelContext.save()
+    }
+
+    private func updateFoodItem(_ item: FoodItem, with entry: ValidatedFoodEntry) {
+        item.name = entry.name
+        item.calories = entry.calories
+        item.grams = entry.grams
+        item.proteinGrams = entry.proteinGrams
+        item.carbGrams = entry.carbGrams
+        item.fatGrams = entry.fatGrams
+        item.healthScore = entry.healthScore
+        item.dailyGoal?.recalculateTotalConsumedCalories()
         try? modelContext.save()
     }
 }

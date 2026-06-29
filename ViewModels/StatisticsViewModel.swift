@@ -10,10 +10,54 @@ struct DailyCalorieSummary: Identifiable, Equatable {
     let targetCalories: Int
 }
 
+enum StatisticsRange: String, CaseIterable, Identifiable {
+    case week
+    case month
+    case threeMonths
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .week:
+            return "7D"
+        case .month:
+            return "1M"
+        case .threeMonths:
+            return "3M"
+        }
+    }
+
+    var dayCount: Int {
+        switch self {
+        case .week:
+            return 7
+        case .month:
+            return 30
+        case .threeMonths:
+            return 90
+        }
+    }
+
+    var chartTitle: String {
+        switch self {
+        case .week:
+            return "Last 7 Days"
+        case .month:
+            return "Last Month"
+        case .threeMonths:
+            return "Last 3 Months"
+        }
+    }
+}
+
 @MainActor
 final class StatisticsViewModel: ObservableObject {
     @Published private(set) var summaries: [DailyCalorieSummary] = []
     @Published private(set) var dailyGoalTarget = 2_000
+    @Published private(set) var maintenanceCalories: Int?
     @Published private(set) var errorMessage: String?
 
     private let calendar: Calendar
@@ -42,17 +86,48 @@ final class StatisticsViewModel: ObservableObject {
         }.count
     }
 
+    var totalDeficit: Int {
+        guard let maintenanceCalories else {
+            return 0
+        }
+
+        return summaries.reduce(0) { total, summary in
+            total + max(maintenanceCalories - summary.consumedCalories, 0)
+        }
+    }
+
+    var totalSurplus: Int {
+        guard let maintenanceCalories else {
+            return 0
+        }
+
+        return summaries.reduce(0) { total, summary in
+            total + max(summary.consumedCalories - maintenanceCalories, 0)
+        }
+    }
+
     var chartMaximumCalories: Double {
         let highestConsumedCalories = summaries.map(\.consumedCalories).max() ?? 0
-        let highestValue = max(highestConsumedCalories, dailyGoalTarget, 500)
+        let highestValue = [
+            highestConsumedCalories,
+            dailyGoalTarget,
+            maintenanceCalories ?? 0,
+            500
+        ].max() ?? 500
         let paddedValue = Double(highestValue) * 1.12
         return ceil(paddedValue / 250) * 250
     }
 
-    func load(using modelContext: ModelContext) {
+    func load(
+        range: StatisticsRange = .week,
+        maintenanceCalories: Int? = nil,
+        using modelContext: ModelContext
+    ) {
         do {
+            self.maintenanceCalories = maintenanceCalories
+
             let today = calendar.startOfDay(for: Date())
-            guard let startDate = calendar.date(byAdding: .day, value: -6, to: today),
+            guard let startDate = calendar.date(byAdding: .day, value: -(range.dayCount - 1), to: today),
                   let endDate = calendar.date(byAdding: .day, value: 1, to: today) else {
                 errorMessage = "Unable to calculate the statistics range."
                 return
@@ -64,7 +139,7 @@ final class StatisticsViewModel: ObservableObject {
             }
 
             dailyGoalTarget = targetForToday(from: goals, today: today)
-            summaries = makeSummaries(from: goals, startDate: startDate)
+            summaries = makeSummaries(from: goals, startDate: startDate, dayCount: range.dayCount)
 
             try modelContext.save()
         } catch {
@@ -99,7 +174,11 @@ final class StatisticsViewModel: ObservableObject {
         return goals.last?.targetCalories ?? 2_000
     }
 
-    private func makeSummaries(from goals: [DailyGoal], startDate: Date) -> [DailyCalorieSummary] {
+    private func makeSummaries(
+        from goals: [DailyGoal],
+        startDate: Date,
+        dayCount: Int
+    ) -> [DailyCalorieSummary] {
         var summariesByDay: [Date: (consumedCalories: Int, targetCalories: Int)] = [:]
         for goal in goals {
             let day = calendar.startOfDay(for: goal.date)
@@ -111,7 +190,7 @@ final class StatisticsViewModel: ObservableObject {
             )
         }
 
-        return (0..<7).compactMap { dayOffset in
+        return (0..<dayCount).compactMap { dayOffset in
             guard let date = calendar.date(byAdding: .day, value: dayOffset, to: startDate) else {
                 return nil
             }

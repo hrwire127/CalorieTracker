@@ -169,6 +169,33 @@ final class DashboardViewModel: ObservableObject {
         }
     }
 
+    func updateFoodItem(
+        _ item: FoodItem,
+        with entry: ValidatedFoodEntry,
+        using modelContext: ModelContext
+    ) {
+        item.name = entry.name
+        item.calories = entry.calories
+        item.grams = entry.grams
+        item.proteinGrams = entry.proteinGrams
+        item.carbGrams = entry.carbGrams
+        item.fatGrams = entry.fatGrams
+        item.healthScore = entry.healthScore
+
+        do {
+            item.dailyGoal?.recalculateTotalConsumedCalories()
+            try modelContext.save()
+
+            if let goal = dailyGoal {
+                updateState(with: goal)
+            } else {
+                loadToday(using: modelContext)
+            }
+        } catch {
+            showError("Unable to update this food item.", underlyingError: error)
+        }
+    }
+
     func deleteFoodItems(at offsets: IndexSet, using modelContext: ModelContext) {
         guard let goal = dailyGoal else {
             return

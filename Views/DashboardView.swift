@@ -9,6 +9,7 @@ struct DashboardView: View {
     @State private var isShowingManualEntry = false
     @State private var isShowingAIEntry = false
     @State private var isShowingGoalEditor = false
+    @State private var editingFoodItem: FoodItem?
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,10 @@ struct DashboardView: View {
                     } else {
                         ForEach(viewModel.foodItems, id: \.id) { item in
                             FoodItemRowView(item: item)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    editingFoodItem = item
+                                }
                         }
                         .onDelete { offsets in
                             viewModel.deleteFoodItems(at: offsets, using: modelContext)
@@ -49,21 +54,32 @@ struct DashboardView: View {
                     }
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            isShowingManualEntry = true
-                        } label: {
-                            Label("Manual", systemImage: "keyboard")
-                        }
-
-                        Button {
-                            isShowingAIEntry = true
-                        } label: {
-                            Label("AI Scan", systemImage: "camera.viewfinder")
-                        }
+                ToolbarItem(placement: .principal) {
+                    Button {
+                        isShowingAIEntry = true
                     } label: {
-                        Label("Add Food", systemImage: "plus.circle.fill")
+                        Text("=")
+                            .font(.title2.bold())
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(
+                                LinearGradient(
+                                    colors: [.teal, .blue],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                in: Circle()
+                            )
+                            .shadow(color: .blue.opacity(0.25), radius: 10, x: 0, y: 5)
+                    }
+                    .accessibilityLabel("AI Scan")
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingManualEntry = true
+                    } label: {
+                        Label("Manual Entry", systemImage: "plus.circle.fill")
                     }
                 }
             }
@@ -107,6 +123,11 @@ struct DashboardView: View {
                     )
                 ) { targets in
                     viewModel.updateDailyGoal(targets: targets, using: modelContext)
+                }
+            }
+            .sheet(item: $editingFoodItem) { item in
+                FoodEditorView(item: item) { entry in
+                    viewModel.updateFoodItem(item, with: entry, using: modelContext)
                 }
             }
             .alert("Calorie Tracker", isPresented: errorBinding) {
