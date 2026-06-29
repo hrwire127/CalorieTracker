@@ -14,7 +14,7 @@ enum BackupManagerError: LocalizedError {
 
 enum BackupManager {
     static let fileName = "CalorieTrackerBackup.json"
-    private static let defaultBirthDateTimestamp = 631_152_000.0
+    static let defaultBirthDateTimestamp = 631_152_000.0
 
     static func exportBackup(using modelContext: ModelContext) throws -> Data {
         let goals = try fetchDailyGoals(using: modelContext)
@@ -124,7 +124,7 @@ struct BackupProfileSnapshot: Codable {
             profileWeightKg: defaults.string(forKey: "ProfileWeightKg") ?? "",
             profileHeightCm: defaults.string(forKey: "ProfileHeightCm") ?? "",
             profileAbout: defaults.string(forKey: "ProfileAbout") ?? "",
-            profileBirthDateTimestamp: defaults.object(forKey: "ProfileBirthDateTimestamp") as? Double ?? defaultBirthDateTimestamp,
+            profileBirthDateTimestamp: defaults.object(forKey: "ProfileBirthDateTimestamp") as? Double ?? BackupManager.defaultBirthDateTimestamp,
             profileSex: defaults.string(forKey: "ProfileSex") ?? ProfileSex.unspecified.rawValue,
             profileActivityLevel: defaults.string(forKey: "ProfileActivityLevel") ?? ActivityLevel.sedentary.rawValue,
             profileImageData: defaults.data(forKey: "ProfileImageData") ?? Data(),
