@@ -17,6 +17,10 @@ final class AICameraEntryViewModel: ObservableObject {
         self.networkManager = networkManager
     }
 
+    var canRetryAnalysis: Bool {
+        selectedImage != nil && !isAnalyzing
+    }
+
     func loadPhoto(from item: PhotosPickerItem) async {
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
@@ -32,6 +36,7 @@ final class AICameraEntryViewModel: ObservableObject {
 
     func analyze(image: UIImage) async {
         isAnalyzing = true
+        errorMessage = nil
         defer { isAnalyzing = false }
 
         do {
@@ -55,6 +60,14 @@ final class AICameraEntryViewModel: ObservableObject {
         } catch {
             showError(error)
         }
+    }
+
+    func retryLastAnalysis() async {
+        guard let selectedImage else {
+            return
+        }
+
+        await analyze(image: selectedImage)
     }
 
     func clearError() {

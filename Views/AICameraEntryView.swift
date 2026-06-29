@@ -39,6 +39,19 @@ struct AICameraEntryView: View {
                         .padding(.top, 4)
                 }
 
+                if viewModel.canRetryAnalysis {
+                    Button {
+                        Task {
+                            await viewModel.retryLastAnalysis()
+                        }
+                    } label: {
+                        Label("Retry Analysis", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(viewModel.isAnalyzing)
+                }
+
                 Spacer(minLength: 0)
             }
             .padding()
@@ -79,6 +92,14 @@ struct AICameraEntryView: View {
                 }
             }
             .alert("AI Analysis", isPresented: errorBinding) {
+                if viewModel.canRetryAnalysis {
+                    Button("Retry") {
+                        Task {
+                            await viewModel.retryLastAnalysis()
+                        }
+                    }
+                }
+
                 Button("OK", role: .cancel) {
                     viewModel.clearError()
                 }

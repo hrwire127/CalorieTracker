@@ -7,7 +7,6 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
 
     @State private var isShowingManualEntry = false
-    @State private var isShowingAIEntry = false
     @State private var isShowingGoalEditor = false
     @State private var editingFoodItem: FoodItem?
 
@@ -54,27 +53,6 @@ struct DashboardView: View {
                     }
                 }
 
-                ToolbarItem(placement: .principal) {
-                    Button {
-                        isShowingAIEntry = true
-                    } label: {
-                        Text("=")
-                            .font(.title2.bold())
-                            .foregroundStyle(.white)
-                            .frame(width: 48, height: 48)
-                            .background(
-                                LinearGradient(
-                                    colors: [.teal, .blue],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                in: Circle()
-                            )
-                            .shadow(color: .blue.opacity(0.25), radius: 10, x: 0, y: 5)
-                    }
-                    .accessibilityLabel("AI Scan")
-                }
-
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isShowingManualEntry = true
@@ -85,21 +63,6 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $isShowingManualEntry) {
                 ManualEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
-                    viewModel.addFoodItem(
-                        name: name,
-                        calories: calories,
-                        grams: grams,
-                        proteinGrams: protein,
-                        carbGrams: carbs,
-                        fatGrams: fat,
-                        healthScore: healthScore,
-                        imageData: imageData,
-                        using: modelContext
-                    )
-                }
-            }
-            .sheet(isPresented: $isShowingAIEntry) {
-                AICameraEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
                         name: name,
                         calories: calories,
@@ -138,6 +101,9 @@ struct DashboardView: View {
                 Text(viewModel.errorMessage ?? "")
             }
             .onAppear {
+                viewModel.loadToday(using: modelContext)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .foodItemsDidChange)) { _ in
                 viewModel.loadToday(using: modelContext)
             }
             .refreshable {
