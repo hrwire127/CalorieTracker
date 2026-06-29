@@ -1,8 +1,12 @@
 import PhotosUI
+import SwiftData
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+
     @AppStorage("GeminiApiKey") private var geminiApiKey: String = ""
     @AppStorage("ProfileName") private var profileName: String = ""
     @AppStorage("ProfileWeightKg") private var profileWeightKg: String = ""
@@ -15,6 +19,12 @@ struct SettingsView: View {
     @AppStorage("AppThemePreference") private var appThemePreference = AppThemePreference.system.rawValue
 
     @State private var selectedProfilePhoto: PhotosPickerItem?
+    @State private var backupDocument = BackupDocument()
+    @State private var isExportingBackup = false
+    @State private var isImportingBackup = false
+    @State private var pendingImportData: Data?
+    @State private var isShowingImportConfirmation = false
+    @State private var backupMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -22,6 +32,7 @@ struct SettingsView: View {
                 profilePhotoSection
                 personalDetailsSection
                 appearanceSection
+                backupSection
                 apiSection
             }
             .navigationTitle("Settings")
@@ -33,6 +44,48 @@ struct SettingsView: View {
                 Task {
                     await loadProfilePhoto(from: newItem)
                 }
+            }
+            .fileExporter(
+                isPresented: $isExportingBackup,
+                document: backupDocument,
+                contentType: .json,
+                defaultFilename: BackupManager.fileName
+            ) { result in
+                switch result {
+                case .success:
+                    backupMessage = "Backup exported successfully."
+                case .failure(let error):
+                    backupMessage = "Export failed. \(error.localizedDescription)"
+                }
+            }
+            .fileImporter(
+                isPresented: $isImportingBackup,
+                allowedContentTypes: [.json],
+                allowsMultipleSelection: false
+            ) { result in
+                handleImportSelection(result)
+            }
+            .confirmationDialog(
+                "Import Backup?",
+                isPresented: $isShowingImportConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Replace Current Data", role: .destructive) {
+                    importPendingBackup()
+                }
+
+                Button("Cancel", role: .cancel) {
+                    pendingImportData = nil
+                }
+            } message: {
+                Text("This will replace the current meals, goals, profile, settings, and API key with the data from the backup file.")
+            }
+            .alert("Backup", isPresented: backupMessageBinding) {
+                Button("OK", role: .cancel) {
+                    backupMessage = nil
+                }
+            } message: {
+                Text(backupMessage ?? "")
             }
         }
     }
@@ -132,6 +185,25 @@ struct SettingsView: View {
         }
     }
 
+    private var backupSection: some View {
+        Section(
+            header: Text("Backup"),
+            footer: Text("Export a backup before deleting the app. Save it in Files or iCloud Drive, then import it after reinstalling.")
+        ) {
+            Button {
+                exportBackup()
+            } label: {
+                Label("Export Backup", systemImage: "square.and.arrow.up")
+            }
+
+            Button {
+                isImportingBackup = true
+            } label: {
+                Label("Import Backup", systemImage: "square.and.arrow.down")
+            }
+        }
+    }
+
     @ViewBuilder
     private var profileImage: some View {
         if let image = UIImage(data: profileImageData) {
@@ -173,6 +245,16 @@ struct SettingsView: View {
         )
     }
 
+    private var backupMessageBinding: Binding<Bool> {
+        Binding {
+            backupMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                backupMessage = nil
+            }
+        }
+    }
+
     @MainActor
     private func loadProfilePhoto(from item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self),
@@ -182,6 +264,50 @@ struct SettingsView: View {
         }
 
         profileImageData = compressedData
+    }
+
+    private func exportBackup() {
+        do {
+            let data = try BackupManager.exportBackup(using: modelContext)
+            backupDocument = BackupDocument(data: data)
+            isExportingBackup = true
+        } catch {
+            backupMessage = "Export failed. \(error.localizedDescription)"
+        }
+    }
+
+    private func handleImportSelection(_ result: Result<[URL], Error>) {
+        do {
+            guard let url = try result.get().first else {
+                return
+            }
+
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            pendingImportData = try Data(contentsOf: url)
+            isShowingImportConfirmation = true
+        } catch {
+            backupMessage = "Import failed. \(error.localizedDescription)"
+        }
+    }
+
+    private func importPendingBackup() {
+        guard let pendingImportData else {
+            return
+        }
+
+        do {
+            try BackupManager.importBackup(from: pendingImportData, using: modelContext)
+            self.pendingImportData = nil
+            backupMessage = "Backup imported successfully."
+        } catch {
+            backupMessage = "Import failed. \(error.localizedDescription)"
+        }
     }
 }
 
