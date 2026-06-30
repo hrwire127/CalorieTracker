@@ -24,7 +24,7 @@ struct DashboardView: View {
 
                 Section {
                     DashboardSummaryView(viewModel: viewModel)
-                        .listRowInsets(EdgeInsets(top: 2, leading: 18, bottom: 10, trailing: 18))
+                        .listRowInsets(EdgeInsets(top: 1, leading: 18, bottom: 14, trailing: 18))
                         .listRowBackground(Color.clear)
                 }
 
