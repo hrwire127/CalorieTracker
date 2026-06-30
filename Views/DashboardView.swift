@@ -14,7 +14,7 @@ struct DashboardView: View {
         NavigationStack {
             List {
                 Section {
-                    VStack(spacing: 3) {
+                    VStack(spacing: 2) {
                         DashboardHeaderBarView(
                             onGoalTap: {
                                 isShowingGoalEditor = true
@@ -129,7 +129,7 @@ private struct HabitHeaderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 2) {
+            HStack(spacing: 6) {
                 ForEach(habitDays) { day in
                     HabitDayPillView(day: day)
                         .frame(maxWidth: .infinity)
@@ -179,7 +179,7 @@ private struct HabitDayPillView: View {
     let day: HabitDaySummary
 
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             ZStack {
                 Circle()
                     .fill(day.isLogged ? Color.primary.opacity(0.10) : Color.clear)
@@ -198,7 +198,7 @@ private struct HabitDayPillView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(day.isLogged || day.isToday ? .primary : .secondary)
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 38, height: 38)
 
             Text(dayNumber)
                 .font(.caption.weight(day.isToday ? .bold : .regular))
