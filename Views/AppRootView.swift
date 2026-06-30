@@ -35,17 +35,21 @@ struct AppRootView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.primary)
-                        .shadow(color: .black.opacity(0.26), radius: 16, x: 0, y: 8)
+                        .fill(.regularMaterial)
+                        .shadow(color: .black.opacity(0.14), radius: 14, x: 0, y: 7)
 
                     Image(systemName: "plus")
-                        .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(Color(.systemBackground))
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundStyle(.blue)
                 }
-                .frame(width: 76, height: 76)
+                .frame(width: 72, height: 72)
                 .overlay {
                     Circle()
-                        .strokeBorder(Color(.systemBackground), lineWidth: 5)
+                        .strokeBorder(.white.opacity(0.36), lineWidth: 1)
+                }
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 0.8)
                 }
             }
             .accessibilityLabel("AI Scan")
