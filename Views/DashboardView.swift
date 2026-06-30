@@ -37,7 +37,7 @@ struct DashboardView: View {
 
                 Section {
                     DashboardSummaryView(viewModel: viewModel)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 14, trailing: 18))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 8, trailing: 18))
                     .listRowBackground(Color.clear)
                 }
 
@@ -67,7 +67,7 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-            .listSectionSpacing(2)
+            .listSectionSpacing(0)
             .sheet(isPresented: $isShowingManualEntry) {
                 ManualEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
