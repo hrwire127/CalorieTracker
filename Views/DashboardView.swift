@@ -15,6 +15,38 @@ struct DashboardView: View {
             List {
                 Section {
                     VStack(spacing: 4) {
+                        HStack {
+                            Button {
+                                isShowingGoalEditor = true
+                            } label: {
+                                Image(systemName: "target")
+                                    .font(.headline)
+                                    .frame(width: 36, height: 36)
+                                    .background(.regularMaterial, in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Diet Goal")
+
+                            Spacer()
+
+                            Text("Today")
+                                .font(.headline.weight(.semibold))
+
+                            Spacer()
+
+                            Button {
+                                isShowingManualEntry = true
+                            } label: {
+                                Image(systemName: "square.and.pencil")
+                                    .font(.headline)
+                                    .frame(width: 36, height: 36)
+                                    .background(.regularMaterial, in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Manual Entry")
+                        }
+                        .padding(.top, 2)
+
                         HabitHeaderView(
                             habitDays: viewModel.habitDays,
                             currentStreak: viewModel.currentStreak
@@ -52,28 +84,6 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        isShowingGoalEditor = true
-                    } label: {
-                        Label("Goal", systemImage: "target")
-                    }
-                }
-
-                ToolbarItem(placement: .principal) {
-                    Text("Today")
-                        .font(.headline.weight(.semibold))
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingManualEntry = true
-                    } label: {
-                        Label("Manual Entry", systemImage: "square.and.pencil")
-                    }
-                }
-            }
             .sheet(isPresented: $isShowingManualEntry) {
                 ManualEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
