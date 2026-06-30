@@ -44,9 +44,6 @@ struct DashboardView: View {
             .navigationTitle("Today")
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: 92)
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {

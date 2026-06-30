@@ -49,9 +49,6 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: 92)
-            }
             .onAppear {
                 refreshTotals()
             }
