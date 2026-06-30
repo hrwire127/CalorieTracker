@@ -54,6 +54,7 @@ workflows:
           echo "Using simulator id: $DEVICE_ID"
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
+          sleep 10
 
           APP_PATH=$(find "$CM_BUILD_DIR/build/ScreenshotDerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 2 -name "*.app" -type d | head -1)
           if [ -z "$APP_PATH" ]; then
@@ -64,8 +65,11 @@ workflows:
 
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
           xcrun simctl launch "$DEVICE_ID" "$BUNDLE_ID"
-          sleep 6
+          sleep 12
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/warmup.png"
+          sleep 5
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/dashboard.png"
+          rm -f "$SCREENSHOT_DIR/warmup.png"
 
           echo "Created screenshots:"
           ls -la "$SCREENSHOT_DIR"
