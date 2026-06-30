@@ -18,7 +18,7 @@ struct DashboardView: View {
                         habitDays: viewModel.habitDays,
                         currentStreak: viewModel.currentStreak
                     )
-                    .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 8, trailing: 16))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 2, trailing: 4))
                     .listRowBackground(Color.clear)
                 }
 
@@ -50,7 +50,8 @@ struct DashboardView: View {
                     }
                 }
             }
-            .navigationTitle("Today")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
             .toolbar {
@@ -60,6 +61,11 @@ struct DashboardView: View {
                     } label: {
                         Label("Goal", systemImage: "target")
                     }
+                }
+
+                ToolbarItem(placement: .principal) {
+                    Text("Today")
+                        .font(.headline.weight(.semibold))
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -137,25 +143,7 @@ private struct HabitHeaderView: View {
     let currentStreak: Int
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Habit")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text(streakTitle)
-                        .font(.headline)
-                }
-
-                Spacer()
-
-                Label("\(loggedCount)/7", systemImage: "checkmark.circle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.green)
-                    .monospacedDigit()
-            }
-
+        VStack(spacing: 0) {
             HStack(spacing: 11) {
                 ForEach(habitDays) { day in
                     HabitDayPillView(day: day)
@@ -163,17 +151,7 @@ private struct HabitHeaderView: View {
                 }
             }
         }
-        .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
-    }
-
-    private var streakTitle: String {
-        currentStreak == 1 ? "1 day streak" : "\(currentStreak) day streak"
-    }
-
-    private var loggedCount: Int {
-        habitDays.filter(\.isLogged).count
+        .padding(.vertical, 4)
     }
 }
 
