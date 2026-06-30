@@ -14,18 +14,16 @@ struct DashboardView: View {
         NavigationStack {
             List {
                 Section {
-                    HabitHeaderView(
-                        habitDays: viewModel.habitDays,
-                        currentStreak: viewModel.currentStreak
-                    )
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                    .listRowBackground(Color.clear)
-                }
+                    VStack(spacing: 4) {
+                        HabitHeaderView(
+                            habitDays: viewModel.habitDays,
+                            currentStreak: viewModel.currentStreak
+                        )
 
-                Section {
-                    DashboardSummaryView(viewModel: viewModel)
-                        .listRowInsets(EdgeInsets(top: 1, leading: 18, bottom: 14, trailing: 18))
-                        .listRowBackground(Color.clear)
+                        DashboardSummaryView(viewModel: viewModel)
+                    }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 14, trailing: 18))
+                    .listRowBackground(Color.clear)
                 }
 
                 Section("Today's Food") {
