@@ -14,23 +14,29 @@ struct DashboardView: View {
         NavigationStack {
             List {
                 Section {
-                    VStack(spacing: 2) {
-                        DashboardHeaderBarView(
-                            onGoalTap: {
-                                isShowingGoalEditor = true
-                            },
-                            onManualTap: {
-                                isShowingManualEntry = true
-                            }
-                        )
+                    DashboardHeaderBarView(
+                        onGoalTap: {
+                            isShowingGoalEditor = true
+                        },
+                        onManualTap: {
+                            isShowingManualEntry = true
+                        }
+                    )
+                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
+                    .listRowBackground(Color.clear)
+                }
 
-                        HabitHeaderView(
-                            habitDays: viewModel.habitDays,
-                            currentStreak: viewModel.currentStreak
-                        )
+                Section {
+                    HabitHeaderView(
+                        habitDays: viewModel.habitDays,
+                        currentStreak: viewModel.currentStreak
+                    )
+                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
+                    .listRowBackground(Color.clear)
+                }
 
-                        DashboardSummaryView(viewModel: viewModel)
-                    }
+                Section {
+                    DashboardSummaryView(viewModel: viewModel)
                     .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 14, trailing: 18))
                     .listRowBackground(Color.clear)
                 }
@@ -61,6 +67,7 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
+            .listSectionSpacing(2)
             .sheet(isPresented: $isShowingManualEntry) {
                 ManualEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
