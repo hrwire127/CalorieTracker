@@ -18,7 +18,7 @@ struct DashboardView: View {
                         habitDays: viewModel.habitDays,
                         currentStreak: viewModel.currentStreak
                     )
-                    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 0, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                     .listRowBackground(Color.clear)
                 }
 
@@ -144,14 +144,14 @@ private struct HabitHeaderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: 2) {
                 ForEach(habitDays) { day in
                     HabitDayPillView(day: day)
                         .frame(maxWidth: .infinity)
                 }
             }
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 0)
     }
 }
 
@@ -159,7 +159,7 @@ private struct HabitDayPillView: View {
     let day: HabitDaySummary
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 3) {
             ZStack {
                 Circle()
                     .fill(day.isLogged ? Color.primary.opacity(0.10) : Color.clear)
@@ -178,7 +178,7 @@ private struct HabitDayPillView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(day.isLogged || day.isToday ? .primary : .secondary)
             }
-            .frame(width: 38, height: 38)
+            .frame(width: 34, height: 34)
 
             Text(dayNumber)
                 .font(.caption.weight(day.isToday ? .bold : .regular))
@@ -187,7 +187,7 @@ private struct HabitDayPillView: View {
 
             Circle()
                 .fill(day.isLogged ? Color.green : Color.clear)
-                .frame(width: 5, height: 5)
+                .frame(width: 4, height: 4)
         }
     }
 
