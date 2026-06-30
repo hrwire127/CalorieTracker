@@ -2,10 +2,20 @@ import Combine
 import Foundation
 import SwiftData
 
+struct HabitDaySummary: Identifiable, Equatable {
+    var id: Date { date }
+
+    let date: Date
+    let isLogged: Bool
+    let isToday: Bool
+}
+
 @MainActor
 final class DashboardViewModel: ObservableObject {
     @Published private(set) var dailyGoal: DailyGoal?
     @Published private(set) var foodItems: [FoodItem] = []
+    @Published private(set) var habitDays: [HabitDaySummary] = []
+    @Published private(set) var currentStreak = 0
     @Published private(set) var errorMessage: String?
 
     private let calendar: Calendar
@@ -79,6 +89,7 @@ final class DashboardViewModel: ObservableObject {
 
             try modelContext.save()
             updateState(with: goal)
+            updateHabitState(using: modelContext)
         } catch {
             showError("Unable to load today's calorie goal.", underlyingError: error)
         }
@@ -138,6 +149,7 @@ final class DashboardViewModel: ObservableObject {
 
             try modelContext.save()
             updateState(with: goal)
+            updateHabitState(using: modelContext)
         } catch {
             showError("Unable to save this food item.", underlyingError: error)
         }
@@ -164,6 +176,7 @@ final class DashboardViewModel: ObservableObject {
 
             try modelContext.save()
             updateState(with: goal)
+            updateHabitState(using: modelContext)
         } catch {
             showError("Unable to update the daily goal.", underlyingError: error)
         }
@@ -191,6 +204,7 @@ final class DashboardViewModel: ObservableObject {
             } else {
                 loadToday(using: modelContext)
             }
+            updateHabitState(using: modelContext)
         } catch {
             showError("Unable to update this food item.", underlyingError: error)
         }
@@ -219,6 +233,7 @@ final class DashboardViewModel: ObservableObject {
 
             try modelContext.save()
             updateState(with: goal)
+            updateHabitState(using: modelContext)
         } catch {
             showError("Unable to delete the selected food item.", underlyingError: error)
         }
@@ -260,6 +275,89 @@ final class DashboardViewModel: ObservableObject {
         descriptor.fetchLimit = 1
 
         return try modelContext.fetch(descriptor).first
+    }
+
+    private func updateHabitState(using modelContext: ModelContext) {
+        do {
+            let today = calendar.startOfDay(for: Date())
+            guard let thirtyDaysAgo = calendar.date(byAdding: .day, value: -29, to: today),
+                  let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else {
+                return
+            }
+
+            let goals = try fetchGoals(from: thirtyDaysAgo, to: tomorrow, using: modelContext)
+            for goal in goals {
+                goal.recalculateTotalConsumedCalories()
+            }
+
+            let loggedDays = Set(goals.compactMap { goal -> Date? in
+                isLogged(goal) ? calendar.startOfDay(for: goal.date) : nil
+            })
+
+            habitDays = makeHabitDays(loggedDays: loggedDays, today: today)
+            currentStreak = calculateCurrentStreak(loggedDays: loggedDays, today: today)
+        } catch {
+            showError("Unable to load habit tracking.", underlyingError: error)
+        }
+    }
+
+    private func fetchGoals(
+        from startDate: Date,
+        to endDate: Date,
+        using modelContext: ModelContext
+    ) throws -> [DailyGoal] {
+        let descriptor = FetchDescriptor<DailyGoal>(
+            predicate: #Predicate<DailyGoal> { goal in
+                goal.date >= startDate && goal.date < endDate
+            },
+            sortBy: [SortDescriptor(\.date)]
+        )
+
+        return try modelContext.fetch(descriptor)
+    }
+
+    private func makeHabitDays(loggedDays: Set<Date>, today: Date) -> [HabitDaySummary] {
+        guard let startDate = calendar.date(byAdding: .day, value: -6, to: today) else {
+            return []
+        }
+
+        return (0..<7).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: startDate) else {
+                return nil
+            }
+
+            let day = calendar.startOfDay(for: date)
+            return HabitDaySummary(
+                date: day,
+                isLogged: loggedDays.contains(day),
+                isToday: calendar.isDate(day, inSameDayAs: today)
+            )
+        }
+    }
+
+    private func calculateCurrentStreak(loggedDays: Set<Date>, today: Date) -> Int {
+        var streak = 0
+        var day = today
+
+        if !loggedDays.contains(day),
+           let yesterday = calendar.date(byAdding: .day, value: -1, to: day),
+           loggedDays.contains(yesterday) {
+            day = yesterday
+        }
+
+        while loggedDays.contains(day) {
+            streak += 1
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: day) else {
+                break
+            }
+            day = previousDay
+        }
+
+        return streak
+    }
+
+    private func isLogged(_ goal: DailyGoal) -> Bool {
+        !(goal.foodItems ?? []).isEmpty || goal.totalConsumedCalories > 0
     }
 
     private func showError(_ message: String, underlyingError: Error) {

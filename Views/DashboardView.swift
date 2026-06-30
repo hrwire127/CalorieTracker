@@ -14,6 +14,15 @@ struct DashboardView: View {
         NavigationStack {
             List {
                 Section {
+                    HabitHeaderView(
+                        habitDays: viewModel.habitDays,
+                        currentStreak: viewModel.currentStreak
+                    )
+                    .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }
+
+                Section {
                     DashboardSummaryView(viewModel: viewModel)
                         .listRowInsets(EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18))
                         .listRowBackground(Color.clear)
@@ -120,6 +129,104 @@ struct DashboardView: View {
                 viewModel.clearError()
             }
         }
+    }
+}
+
+private struct HabitHeaderView: View {
+    let habitDays: [HabitDaySummary]
+    let currentStreak: Int
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Habit")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(streakTitle)
+                        .font(.headline)
+                }
+
+                Spacer()
+
+                Label("\(loggedCount)/7", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .monospacedDigit()
+            }
+
+            HStack(spacing: 11) {
+                ForEach(habitDays) { day in
+                    HabitDayPillView(day: day)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
+    }
+
+    private var streakTitle: String {
+        currentStreak == 1 ? "1 day streak" : "\(currentStreak) day streak"
+    }
+
+    private var loggedCount: Int {
+        habitDays.filter(\.isLogged).count
+    }
+}
+
+private struct HabitDayPillView: View {
+    let day: HabitDaySummary
+
+    var body: some View {
+        VStack(spacing: 7) {
+            ZStack {
+                Circle()
+                    .fill(day.isLogged ? Color.primary.opacity(0.10) : Color.clear)
+
+                Circle()
+                    .strokeBorder(
+                        day.isToday ? Color.primary : Color.secondary.opacity(0.55),
+                        style: StrokeStyle(
+                            lineWidth: day.isToday ? 2.5 : 2,
+                            lineCap: .round,
+                            dash: strokeDash
+                        )
+                    )
+
+                Text(weekdaySymbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(day.isLogged || day.isToday ? .primary : .secondary)
+            }
+            .frame(width: 42, height: 42)
+
+            Text(dayNumber)
+                .font(.caption.weight(day.isToday ? .bold : .regular))
+                .foregroundStyle(day.isToday ? .primary : .secondary)
+                .monospacedDigit()
+
+            Circle()
+                .fill(day.isLogged ? Color.green : Color.clear)
+                .frame(width: 5, height: 5)
+        }
+    }
+
+    private var weekdaySymbol: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E"
+        return String(formatter.string(from: day.date).prefix(1))
+    }
+
+    private var dayNumber: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter.string(from: day.date)
+    }
+
+    private var strokeDash: [CGFloat] {
+        day.isLogged || day.isToday ? [] : [5, 5]
     }
 }
 
