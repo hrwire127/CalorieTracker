@@ -14,38 +14,15 @@ struct DashboardView: View {
         NavigationStack {
             List {
                 Section {
-                    VStack(spacing: 4) {
-                        HStack {
-                            Button {
+                    VStack(spacing: 3) {
+                        DashboardHeaderBarView(
+                            onGoalTap: {
                                 isShowingGoalEditor = true
-                            } label: {
-                                Image(systemName: "target")
-                                    .font(.headline)
-                                    .frame(width: 36, height: 36)
-                                    .background(.regularMaterial, in: Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Diet Goal")
-
-                            Spacer()
-
-                            Text("Today")
-                                .font(.headline.weight(.semibold))
-
-                            Spacer()
-
-                            Button {
+                            },
+                            onManualTap: {
                                 isShowingManualEntry = true
-                            } label: {
-                                Image(systemName: "square.and.pencil")
-                                    .font(.headline)
-                                    .frame(width: 36, height: 36)
-                                    .background(.regularMaterial, in: Circle())
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Manual Entry")
-                        }
-                        .padding(.top, 2)
+                        )
 
                         HabitHeaderView(
                             habitDays: viewModel.habitDays,
@@ -160,6 +137,41 @@ private struct HabitHeaderView: View {
             }
         }
         .padding(.vertical, 0)
+    }
+}
+
+private struct DashboardHeaderBarView: View {
+    let onGoalTap: () -> Void
+    let onManualTap: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: onGoalTap) {
+                Image(systemName: "target")
+                    .font(.headline)
+                    .frame(width: 36, height: 36)
+                    .background(.regularMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Diet Goal")
+
+            Spacer()
+
+            Text("Today")
+                .font(.headline.weight(.semibold))
+
+            Spacer()
+
+            Button(action: onManualTap) {
+                Image(systemName: "square.and.pencil")
+                    .font(.headline)
+                    .frame(width: 36, height: 36)
+                    .background(.regularMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Manual Entry")
+        }
+        .padding(.top, 0)
     }
 }
 
