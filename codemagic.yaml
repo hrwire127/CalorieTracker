@@ -1,4 +1,78 @@
 workflows:
+  ios-simulator-screenshots:
+    name: iOS Simulator Screenshots
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        XCODE_PROJECT: "CalorieTracker.xcodeproj"
+        XCODE_SCHEME: "CalorieTracker"
+        BUNDLE_ID: "com.artiom.calorietracker"
+      xcode: latest
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Generate Xcode project
+        script: |
+          cd "$CM_BUILD_DIR"
+          xcodegen generate --spec project.yml
+      - name: Build app for screenshot simulator
+        script: |
+          mkdir -p /tmp/xcodebuild_logs
+          xcodebuild -version
+          DERIVED_DATA_PATH="$CM_BUILD_DIR/build/ScreenshotDerivedData"
+          set +e
+          xcodebuild build \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild_logs/screenshot-simulator-build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "---- Relevant build errors ----"
+            grep -nE "error:|fatal error:|No such module|cannot find|failed" /tmp/xcodebuild_logs/screenshot-simulator-build.log | tail -120 || true
+            exit $BUILD_STATUS
+          fi
+      - name: Boot simulator and capture screenshots
+        script: |
+          SCREENSHOT_DIR="$CM_BUILD_DIR/build/screenshots"
+          mkdir -p "$SCREENSHOT_DIR"
+
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone (16|15|14)" | head -1 | sed -E 's/.*\(([A-F0-9-]+)\).*/\1/')
+          if [ -z "$DEVICE_ID" ]; then
+            echo "Could not find or create an iPhone simulator."
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          echo "Using simulator id: $DEVICE_ID"
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+          APP_PATH=$(find "$CM_BUILD_DIR/build/ScreenshotDerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 2 -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Could not find built simulator .app."
+            find "$CM_BUILD_DIR/build/ScreenshotDerivedData/Build/Products" -maxdepth 4 -print || true
+            exit 1
+          fi
+
+          xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          xcrun simctl launch "$DEVICE_ID" "$BUNDLE_ID"
+          sleep 6
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/dashboard.png"
+
+          echo "Created screenshots:"
+          ls -la "$SCREENSHOT_DIR"
+    artifacts:
+      - build/screenshots/*.png
+      - /tmp/xcodebuild_logs/*.log
+
   ios-simulator-build:
     name: iOS Simulator Build
     max_build_duration: 60
