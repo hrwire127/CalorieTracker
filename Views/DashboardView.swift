@@ -12,62 +12,62 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    DashboardHeaderBarView(
-                        onGoalTap: {
-                            isShowingGoalEditor = true
-                        },
-                        onManualTap: {
-                            isShowingManualEntry = true
-                        }
-                    )
-                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
-                    .listRowBackground(Color.clear)
-                }
+            VStack(spacing: 6) {
+                DashboardHeaderBarView(
+                    onGoalTap: {
+                        isShowingGoalEditor = true
+                    },
+                    onManualTap: {
+                        isShowingManualEntry = true
+                    }
+                )
+                .padding(.horizontal, 18)
 
-                Section {
-                    HabitHeaderView(
-                        habitDays: viewModel.habitDays,
-                        currentStreak: viewModel.currentStreak
-                    )
-                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18))
-                    .listRowBackground(Color.clear)
-                }
+                HabitHeaderView(
+                    habitDays: viewModel.habitDays,
+                    currentStreak: viewModel.currentStreak
+                )
+                .padding(.horizontal, 18)
 
-                Section {
-                    DashboardSummaryView(viewModel: viewModel)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 8, trailing: 18))
-                    .listRowBackground(Color.clear)
-                }
-
-                Section("Today's Food") {
-                    if viewModel.foodItems.isEmpty {
-                        ContentUnavailableView(
-                            "No Food Logged",
-                            systemImage: "fork.knife"
-                        )
-                        .frame(maxWidth: .infinity)
+                List {
+                    Section {
+                        DashboardSummaryView(viewModel: viewModel)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 8, trailing: 18))
                         .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(viewModel.foodItems, id: \.id) { item in
-                            FoodItemRowView(item: item)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    editingFoodItem = item
-                                }
-                        }
-                        .onDelete { offsets in
-                            viewModel.deleteFoodItems(at: offsets, using: modelContext)
+                    }
+
+                    Section("Today's Food") {
+                        if viewModel.foodItems.isEmpty {
+                            ContentUnavailableView(
+                                "No Food Logged",
+                                systemImage: "fork.knife"
+                            )
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                        } else {
+                            ForEach(viewModel.foodItems, id: \.id) { item in
+                                FoodItemRowView(item: item)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        editingFoodItem = item
+                                    }
+                            }
+                            .onDelete { offsets in
+                                viewModel.deleteFoodItems(at: offsets, using: modelContext)
+                            }
                         }
                     }
+                }
+                .scrollContentBackground(.hidden)
+                .listSectionSpacing(0)
+                .refreshable {
+                    viewModel.loadToday(using: modelContext)
                 }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.systemGroupedBackground))
-            .listSectionSpacing(0)
             .sheet(isPresented: $isShowingManualEntry) {
                 ManualEntryView { name, calories, grams, protein, carbs, fat, healthScore, imageData in
                     viewModel.addFoodItem(
@@ -111,9 +111,6 @@ struct DashboardView: View {
                 viewModel.loadToday(using: modelContext)
             }
             .onReceive(NotificationCenter.default.publisher(for: .foodItemsDidChange)) { _ in
-                viewModel.loadToday(using: modelContext)
-            }
-            .refreshable {
                 viewModel.loadToday(using: modelContext)
             }
         }
