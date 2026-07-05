@@ -7,6 +7,7 @@ workflows:
       vars:
         XCODE_PROJECT: "CalorieTracker.xcodeproj"
         XCODE_SCHEME: "CalorieTracker"
+        XCODE_SCREENSHOT_SCHEME: "CalorieTrackerScreenshots"
         BUNDLE_ID: "com.artiom.calorietracker"
       xcode: latest
     scripts:
@@ -39,10 +40,11 @@ workflows:
             grep -nE "error:|fatal error:|No such module|cannot find|failed" /tmp/xcodebuild_logs/screenshot-simulator-build.log | tail -120 || true
             exit $BUILD_STATUS
           fi
-      - name: Boot simulator and capture screenshots
+      - name: Run screenshot UI tests
         script: |
           SCREENSHOT_DIR="$CM_BUILD_DIR/build/screenshots"
           mkdir -p "$SCREENSHOT_DIR"
+          mkdir -p /tmp/xcodebuild_logs
 
           DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone (16|15|14)" | head -1 | sed -E 's/.*\(([A-F0-9-]+)\).*/\1/')
           if [ -z "$DEVICE_ID" ]; then
@@ -54,27 +56,33 @@ workflows:
           echo "Using simulator id: $DEVICE_ID"
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
-          sleep 10
+          xcrun simctl ui "$DEVICE_ID" appearance light || true
 
-          APP_PATH=$(find "$CM_BUILD_DIR/build/ScreenshotDerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 2 -name "*.app" -type d | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Could not find built simulator .app."
-            find "$CM_BUILD_DIR/build/ScreenshotDerivedData/Build/Products" -maxdepth 4 -print || true
-            exit 1
+          DERIVED_DATA_PATH="$CM_BUILD_DIR/build/ScreenshotDerivedData"
+          RESULT_BUNDLE_PATH="$CM_BUILD_DIR/build/ScreenshotTests.xcresult"
+          rm -rf "$RESULT_BUNDLE_PATH"
+
+          set +e
+          SCREENSHOT_DIR="$SCREENSHOT_DIR" xcodebuild test \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCREENSHOT_SCHEME" \
+            -configuration Debug \
+            -destination "id=$DEVICE_ID" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild_logs/screenshot-ui-tests.log
+          TEST_STATUS=${PIPESTATUS[0]}
+          if [ $TEST_STATUS -ne 0 ]; then
+            echo "---- Relevant screenshot test errors ----"
+            grep -nE "error:|fatal error:|No such module|cannot find|failed|XCTAssert|XCTFail" /tmp/xcodebuild_logs/screenshot-ui-tests.log | tail -140 || true
+            exit $TEST_STATUS
           fi
-
-          xcrun simctl install "$DEVICE_ID" "$APP_PATH"
-          xcrun simctl launch "$DEVICE_ID" "$BUNDLE_ID"
-          sleep 12
-          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/warmup.png"
-          sleep 5
-          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/dashboard.png"
-          rm -f "$SCREENSHOT_DIR/warmup.png"
 
           echo "Created screenshots:"
           ls -la "$SCREENSHOT_DIR"
     artifacts:
       - build/screenshots/*.png
+      - build/ScreenshotTests.xcresult/**
       - /tmp/xcodebuild_logs/*.log
 
   ios-simulator-build:

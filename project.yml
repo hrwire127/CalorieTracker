@@ -34,3 +34,25 @@ targets:
         CODE_SIGN_STYLE: Automatic
     scheme:
       gatherCoverageData: false
+  CalorieTrackerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: CalorieTracker
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.artiom.calorietracker.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: CalorieTracker
+schemes:
+  CalorieTrackerScreenshots:
+    build:
+      targets:
+        CalorieTracker: all
+        CalorieTrackerUITests: [test]
+    test:
+      targets:
+        - CalorieTrackerUITests
