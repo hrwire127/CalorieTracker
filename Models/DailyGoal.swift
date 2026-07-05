@@ -35,6 +35,23 @@ final class DailyGoal {
         self.foodItems = foodItems
     }
 
+    convenience init(
+        date: Date = Calendar.current.startOfDay(for: Date()),
+        targets: DailyGoalTargets,
+        totalConsumedCalories: Int = 0,
+        foodItems: [FoodItem] = []
+    ) {
+        self.init(
+            date: date,
+            targetCalories: targets.calories,
+            targetProteinGrams: targets.proteinGrams,
+            targetCarbGrams: targets.carbGrams,
+            targetFatGrams: targets.fatGrams,
+            totalConsumedCalories: totalConsumedCalories,
+            foodItems: foodItems
+        )
+    }
+
     var remainingCalories: Int {
         max(targetCalories - totalConsumedCalories, 0)
     }

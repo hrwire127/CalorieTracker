@@ -136,9 +136,38 @@ struct AppRootView: View {
             return existingGoal
         }
 
-        let newGoal = DailyGoal(date: Date())
+        let newGoal = DailyGoal(date: Date(), targets: try targetsForNewGoal())
         modelContext.insert(newGoal)
         return newGoal
+    }
+
+    private func targetsForNewGoal() throws -> DailyGoalTargets {
+        guard !DailyGoalTargets.hasSavedCurrent,
+              let latestGoal = try fetchLatestGoalBeforeToday() else {
+            return DailyGoalTargets.current
+        }
+
+        let targets = DailyGoalTargets(
+            calories: latestGoal.targetCalories,
+            proteinGrams: latestGoal.targetProteinGrams,
+            carbGrams: latestGoal.targetCarbGrams,
+            fatGrams: latestGoal.targetFatGrams
+        )
+        targets.saveAsCurrent()
+        return targets
+    }
+
+    private func fetchLatestGoalBeforeToday() throws -> DailyGoal? {
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        var descriptor = FetchDescriptor<DailyGoal>(
+            predicate: #Predicate<DailyGoal> { goal in
+                goal.date < startOfToday
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+
+        return try modelContext.fetch(descriptor).first
     }
 
     private func fetchTodayGoal() throws -> DailyGoal? {

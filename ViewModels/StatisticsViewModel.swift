@@ -8,6 +8,7 @@ struct DailyCalorieSummary: Identifiable, Equatable {
     let date: Date
     let consumedCalories: Int
     let targetCalories: Int
+    let hasLoggedFood: Bool
 }
 
 enum StatisticsRange: String, CaseIterable, Identifiable {
@@ -73,37 +74,67 @@ final class StatisticsViewModel: ObservableObject {
     }
 
     var averageCalories: Int {
-        guard !summaries.isEmpty else {
+        guard !loggedSummaries.isEmpty else {
             return 0
         }
 
-        return totalCalories / summaries.count
+        return totalCalories / loggedSummaries.count
     }
 
-    var daysMeetingGoal: Int {
+    var daysCompleted: Int {
         summaries.filter { summary in
-            summary.consumedCalories >= summary.targetCalories
+            summary.hasLoggedFood && summary.consumedCalories <= summary.targetCalories
         }.count
     }
 
-    var totalDeficit: Int {
-        guard let maintenanceCalories else {
+    var daysMissed: Int {
+        summaries.count - daysCompleted
+    }
+
+    var averageDeficitPerDay: Int {
+        guard !loggedSummaries.isEmpty else {
             return 0
         }
 
-        return summaries.reduce(0) { total, summary in
-            total + max(maintenanceCalories - summary.consumedCalories, 0)
+        return totalDeficit / loggedSummaries.count
+    }
+
+    var averageSurplusPerDay: Int {
+        guard !loggedSummaries.isEmpty else {
+            return 0
+        }
+
+        return totalSurplus / loggedSummaries.count
+    }
+
+    var totalDeficit: Int {
+        loggedSummaries.reduce(0) { total, summary in
+            total + max(baselineCalories(for: summary) - summary.consumedCalories, 0)
         }
     }
 
     var totalSurplus: Int {
-        guard let maintenanceCalories else {
-            return 0
+        loggedSummaries.reduce(0) { total, summary in
+            total + max(summary.consumedCalories - baselineCalories(for: summary), 0)
         }
+    }
 
-        return summaries.reduce(0) { total, summary in
-            total + max(summary.consumedCalories - maintenanceCalories, 0)
+    var netCalorieBalance: Int {
+        loggedSummaries.reduce(0) { total, summary in
+            total + (summary.consumedCalories - baselineCalories(for: summary))
         }
+    }
+
+    var netCalorieBalanceTitle: String {
+        netCalorieBalance >= 0 ? "Total Kcal Gained" : "Total Kcal Lost"
+    }
+
+    var netCalorieBalanceMagnitude: Int {
+        abs(netCalorieBalance)
+    }
+
+    private var loggedSummaries: [DailyCalorieSummary] {
+        summaries.filter(\.hasLoggedFood)
     }
 
     var chartMaximumCalories: Double {
@@ -171,7 +202,7 @@ final class StatisticsViewModel: ObservableObject {
             return todayGoal.targetCalories
         }
 
-        return goals.last?.targetCalories ?? 2_000
+        return goals.last?.targetCalories ?? DailyGoalTargets.current.calories
     }
 
     private func makeSummaries(
@@ -179,14 +210,16 @@ final class StatisticsViewModel: ObservableObject {
         startDate: Date,
         dayCount: Int
     ) -> [DailyCalorieSummary] {
-        var summariesByDay: [Date: (consumedCalories: Int, targetCalories: Int)] = [:]
+        var summariesByDay: [Date: (consumedCalories: Int, targetCalories: Int, hasLoggedFood: Bool)] = [:]
         for goal in goals {
             let day = calendar.startOfDay(for: goal.date)
             let existingSummary = summariesByDay[day]
+            let hasLoggedFood = !(goal.foodItems ?? []).isEmpty || goal.totalConsumedCalories > 0
 
             summariesByDay[day] = (
                 consumedCalories: (existingSummary?.consumedCalories ?? 0) + goal.totalConsumedCalories,
-                targetCalories: goal.targetCalories
+                targetCalories: goal.targetCalories,
+                hasLoggedFood: (existingSummary?.hasLoggedFood ?? false) || hasLoggedFood
             )
         }
 
@@ -199,8 +232,13 @@ final class StatisticsViewModel: ObservableObject {
             return DailyCalorieSummary(
                 date: date,
                 consumedCalories: summary?.consumedCalories ?? 0,
-                targetCalories: summary?.targetCalories ?? dailyGoalTarget
+                targetCalories: summary?.targetCalories ?? dailyGoalTarget,
+                hasLoggedFood: summary?.hasLoggedFood ?? false
             )
         }
+    }
+
+    private func baselineCalories(for summary: DailyCalorieSummary) -> Int {
+        maintenanceCalories ?? summary.targetCalories
     }
 }

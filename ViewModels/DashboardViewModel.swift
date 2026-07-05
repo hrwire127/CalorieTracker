@@ -25,19 +25,19 @@ final class DashboardViewModel: ObservableObject {
     }
 
     var targetCalories: Int {
-        dailyGoal?.targetCalories ?? 2_000
+        dailyGoal?.targetCalories ?? DailyGoalTargets.current.calories
     }
 
     var targetProteinGrams: Int {
-        dailyGoal?.targetProteinGrams ?? 100
+        dailyGoal?.targetProteinGrams ?? DailyGoalTargets.current.proteinGrams
     }
 
     var targetCarbGrams: Int {
-        dailyGoal?.targetCarbGrams ?? DailyGoal.defaultCarbGoal(calories: targetCalories)
+        dailyGoal?.targetCarbGrams ?? DailyGoalTargets.current.carbGrams
     }
 
     var targetFatGrams: Int {
-        dailyGoal?.targetFatGrams ?? 100
+        dailyGoal?.targetFatGrams ?? DailyGoalTargets.current.fatGrams
     }
 
     var consumedCalories: Int {
@@ -85,6 +85,7 @@ final class DashboardViewModel: ObservableObject {
     func loadToday(using modelContext: ModelContext) {
         do {
             let goal = try fetchOrCreateTodayGoal(in: modelContext)
+            saveCurrentTargetsIfNeeded(from: goal)
             goal.recalculateTotalConsumedCalories()
 
             try modelContext.save()
@@ -168,6 +169,7 @@ final class DashboardViewModel: ObservableObject {
 
         do {
             let goal = try fetchOrCreateTodayGoal(in: modelContext)
+            targets.saveAsCurrent()
             goal.targetCalories = targets.calories
             goal.targetProteinGrams = targets.proteinGrams
             goal.targetCarbGrams = targets.carbGrams
@@ -255,9 +257,52 @@ final class DashboardViewModel: ObservableObject {
             return existingGoal
         }
 
-        let newGoal = DailyGoal(date: Date())
+        let newGoal = DailyGoal(date: Date(), targets: try targetsForNewGoal(in: modelContext))
         modelContext.insert(newGoal)
         return newGoal
+    }
+
+    private func targetsForNewGoal(in modelContext: ModelContext) throws -> DailyGoalTargets {
+        guard !DailyGoalTargets.hasSavedCurrent,
+              let latestGoal = try fetchLatestGoalBeforeToday(in: modelContext) else {
+            return DailyGoalTargets.current
+        }
+
+        let targets = DailyGoalTargets(
+            calories: latestGoal.targetCalories,
+            proteinGrams: latestGoal.targetProteinGrams,
+            carbGrams: latestGoal.targetCarbGrams,
+            fatGrams: latestGoal.targetFatGrams
+        )
+        targets.saveAsCurrent()
+        return targets
+    }
+
+    private func saveCurrentTargetsIfNeeded(from goal: DailyGoal) {
+        guard !DailyGoalTargets.hasSavedCurrent else {
+            return
+        }
+
+        DailyGoalTargets(
+            calories: goal.targetCalories,
+            proteinGrams: goal.targetProteinGrams,
+            carbGrams: goal.targetCarbGrams,
+            fatGrams: goal.targetFatGrams
+        )
+        .saveAsCurrent()
+    }
+
+    private func fetchLatestGoalBeforeToday(in modelContext: ModelContext) throws -> DailyGoal? {
+        let startOfToday = calendar.startOfDay(for: Date())
+        var descriptor = FetchDescriptor<DailyGoal>(
+            predicate: #Predicate<DailyGoal> { goal in
+                goal.date < startOfToday
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+
+        return try modelContext.fetch(descriptor).first
     }
 
     private func fetchTodayGoal(in modelContext: ModelContext) throws -> DailyGoal? {

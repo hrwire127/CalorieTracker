@@ -115,9 +115,14 @@ struct BackupProfileSnapshot: Codable {
     let profileActivityLevel: String
     let profileImageData: Data
     let appThemePreference: String
+    let currentTargetCalories: Int?
+    let currentTargetProteinGrams: Int?
+    let currentTargetCarbGrams: Int?
+    let currentTargetFatGrams: Int?
 
     static func fromUserDefaults() -> BackupProfileSnapshot {
         let defaults = UserDefaults.standard
+        let currentTargets = DailyGoalTargets.current
         return BackupProfileSnapshot(
             geminiApiKey: defaults.string(forKey: "GeminiApiKey") ?? "",
             profileName: defaults.string(forKey: "ProfileName") ?? "",
@@ -128,7 +133,11 @@ struct BackupProfileSnapshot: Codable {
             profileSex: defaults.string(forKey: "ProfileSex") ?? ProfileSex.unspecified.rawValue,
             profileActivityLevel: defaults.string(forKey: "ProfileActivityLevel") ?? ActivityLevel.sedentary.rawValue,
             profileImageData: defaults.data(forKey: "ProfileImageData") ?? Data(),
-            appThemePreference: defaults.string(forKey: "AppThemePreference") ?? AppThemePreference.system.rawValue
+            appThemePreference: defaults.string(forKey: "AppThemePreference") ?? AppThemePreference.system.rawValue,
+            currentTargetCalories: currentTargets.calories,
+            currentTargetProteinGrams: currentTargets.proteinGrams,
+            currentTargetCarbGrams: currentTargets.carbGrams,
+            currentTargetFatGrams: currentTargets.fatGrams
         )
     }
 
@@ -144,6 +153,19 @@ struct BackupProfileSnapshot: Codable {
         defaults.set(profileActivityLevel, forKey: "ProfileActivityLevel")
         defaults.set(profileImageData, forKey: "ProfileImageData")
         defaults.set(appThemePreference, forKey: "AppThemePreference")
+
+        if let currentTargetCalories,
+           let currentTargetProteinGrams,
+           let currentTargetCarbGrams,
+           let currentTargetFatGrams {
+            DailyGoalTargets(
+                calories: currentTargetCalories,
+                proteinGrams: currentTargetProteinGrams,
+                carbGrams: currentTargetCarbGrams,
+                fatGrams: currentTargetFatGrams
+            )
+            .saveAsCurrent()
+        }
     }
 }
 

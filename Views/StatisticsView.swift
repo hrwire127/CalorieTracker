@@ -55,35 +55,51 @@ struct StatisticsView: View {
     private var summaryMetrics: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             StatisticsMetricView(
-                title: "Average",
-                value: "\(viewModel.averageCalories)",
+                title: "Avg Deficit",
+                value: "\(viewModel.averageDeficitPerDay)",
                 suffix: "kcal/day",
-                systemImage: "chart.line.uptrend.xyaxis",
-                tint: .blue
-            )
-
-            StatisticsMetricView(
-                title: "Total",
-                value: "\(viewModel.totalCalories)",
-                suffix: "kcal",
-                systemImage: "sum",
-                tint: .green
-            )
-
-            StatisticsMetricView(
-                title: "Deficit",
-                value: "\(viewModel.totalDeficit)",
-                suffix: "kcal",
                 systemImage: "arrow.down.circle.fill",
                 tint: .teal
             )
 
             StatisticsMetricView(
-                title: "Goal Days",
-                value: "\(viewModel.daysMeetingGoal)",
-                suffix: "days",
-                systemImage: "target",
+                title: "Avg Surplus",
+                value: "\(viewModel.averageSurplusPerDay)",
+                suffix: "kcal/day",
+                systemImage: "arrow.up.circle.fill",
                 tint: .orange
+            )
+
+            StatisticsMetricView(
+                title: "Completed",
+                value: "\(viewModel.daysCompleted)",
+                suffix: "days",
+                systemImage: "checkmark.circle.fill",
+                tint: .green
+            )
+
+            StatisticsMetricView(
+                title: "Missed",
+                value: "\(viewModel.daysMissed)",
+                suffix: "days",
+                systemImage: "xmark.circle.fill",
+                tint: .red
+            )
+
+            StatisticsMetricView(
+                title: viewModel.netCalorieBalanceTitle,
+                value: "\(viewModel.netCalorieBalanceMagnitude)",
+                suffix: "kcal",
+                systemImage: viewModel.netCalorieBalance >= 0 ? "plus.forwardslash.minus" : "flame.fill",
+                tint: viewModel.netCalorieBalance >= 0 ? .orange : .teal
+            )
+
+            StatisticsMetricView(
+                title: "Logged Avg",
+                value: "\(viewModel.averageCalories)",
+                suffix: "kcal/day",
+                systemImage: "chart.line.uptrend.xyaxis",
+                tint: .blue
             )
         }
     }
@@ -122,7 +138,7 @@ struct StatisticsView: View {
                     )
                     .foregroundStyle(
                         LinearGradient(
-                            colors: summary.consumedCalories >= summary.targetCalories ? [.orange, .red] : [.blue, .teal],
+                            colors: summary.consumedCalories > summary.targetCalories ? [.orange, .red] : [.blue, .teal],
                             startPoint: .bottom,
                             endPoint: .top
                         )
