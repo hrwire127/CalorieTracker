@@ -78,10 +78,64 @@ workflows:
             exit $TEST_STATUS
           fi
 
+          ATTACHMENT_DIR="$SCREENSHOT_DIR/xcresult-attachments"
+          mkdir -p "$ATTACHMENT_DIR"
+
+          if xcrun xcresulttool export attachments \
+            --path "$RESULT_BUNDLE_PATH" \
+            --output-path "$ATTACHMENT_DIR" >/tmp/xcodebuild_logs/xcresult-attachments-export.log 2>&1; then
+            find "$ATTACHMENT_DIR" -type f -name "*.png" -exec cp {} "$SCREENSHOT_DIR/" \;
+          else
+            echo "xcresulttool attachment export failed; falling back to direct PNG extraction."
+            cat /tmp/xcodebuild_logs/xcresult-attachments-export.log || true
+          fi
+
+          PNG_COUNT=$(find "$SCREENSHOT_DIR" -maxdepth 1 -name "*.png" | wc -l | tr -d ' ')
+          if [ "$PNG_COUNT" -eq 0 ]; then
+            SCREENSHOT_NAMES=(
+              "01_dashboard"
+              "02_diet_goal"
+              "03_manual_entry"
+              "04_ai_entry"
+              "05_history"
+              "06_stats"
+              "07_about_me"
+            )
+            PNG_INDEX=0
+
+            while IFS= read -r png_file; do
+              if [ "$PNG_INDEX" -lt "${#SCREENSHOT_NAMES[@]}" ]; then
+                target_name="${SCREENSHOT_NAMES[$PNG_INDEX]}"
+              else
+                target_name=$(printf "screenshot_%02d" "$((PNG_INDEX + 1))")
+              fi
+
+              cp "$png_file" "$SCREENSHOT_DIR/$target_name.png"
+              PNG_INDEX=$((PNG_INDEX + 1))
+            done < <(
+              find "$RESULT_BUNDLE_PATH/Data" -type f -name "data*" -print0 |
+              while IFS= read -r -d '' data_file; do
+                if [ "$(xxd -p -l 8 "$data_file")" = "89504e470d0a1a0a" ]; then
+                  stat -f "%m %N" "$data_file"
+                fi
+              done |
+              sort -n |
+              cut -d ' ' -f 2-
+            )
+          fi
+
+          PNG_COUNT=$(find "$SCREENSHOT_DIR" -maxdepth 1 -name "*.png" | wc -l | tr -d ' ')
+          if [ "$PNG_COUNT" -eq 0 ]; then
+            echo "No PNG screenshots were extracted."
+            find "$RESULT_BUNDLE_PATH" -maxdepth 3 -type f | head -120 || true
+            exit 1
+          fi
+
           echo "Created screenshots:"
           ls -la "$SCREENSHOT_DIR"
     artifacts:
       - build/screenshots/*.png
+      - build/screenshots/**/*.png
       - build/ScreenshotTests.xcresult/**
       - /tmp/xcodebuild_logs/*.log
 
