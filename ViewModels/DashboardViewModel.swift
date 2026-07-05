@@ -2,12 +2,22 @@ import Combine
 import Foundation
 import SwiftData
 
+enum HabitDayStatus: Equatable {
+    case empty
+    case success
+    case surplus
+}
+
 struct HabitDaySummary: Identifiable, Equatable {
     var id: Date { date }
 
     let date: Date
-    let isLogged: Bool
+    let status: HabitDayStatus
     let isToday: Bool
+
+    var isLogged: Bool {
+        status == .success || status == .surplus
+    }
 }
 
 @MainActor
@@ -335,12 +345,13 @@ final class DashboardViewModel: ObservableObject {
                 goal.recalculateTotalConsumedCalories()
             }
 
-            let loggedDays = Set(goals.compactMap { goal -> Date? in
-                isLogged(goal) ? calendar.startOfDay(for: goal.date) : nil
+            let statusByDay = makeHabitStatusByDay(from: goals)
+            let successDays = Set(statusByDay.compactMap { day, status in
+                status == .success ? day : nil
             })
 
-            habitDays = makeHabitDays(loggedDays: loggedDays, today: today)
-            currentStreak = calculateCurrentStreak(loggedDays: loggedDays, today: today)
+            habitDays = makeHabitDays(statusByDay: statusByDay, today: today)
+            currentStreak = calculateCurrentStreak(successDays: successDays, today: today)
         } catch {
             showError("Unable to load habit tracking.", underlyingError: error)
         }
@@ -361,7 +372,37 @@ final class DashboardViewModel: ObservableObject {
         return try modelContext.fetch(descriptor)
     }
 
-    private func makeHabitDays(loggedDays: Set<Date>, today: Date) -> [HabitDaySummary] {
+    private func makeHabitStatusByDay(from goals: [DailyGoal]) -> [Date: HabitDayStatus] {
+        goals.reduce(into: [:]) { result, goal in
+            let day = calendar.startOfDay(for: goal.date)
+            let status = habitStatus(for: goal)
+            let currentStatus = result[day] ?? .empty
+
+            result[day] = mergedHabitStatus(currentStatus, status)
+        }
+    }
+
+    private func habitStatus(for goal: DailyGoal) -> HabitDayStatus {
+        guard isLogged(goal) else {
+            return .empty
+        }
+
+        return goal.totalConsumedCalories <= goal.targetCalories ? .success : .surplus
+    }
+
+    private func mergedHabitStatus(_ currentStatus: HabitDayStatus, _ newStatus: HabitDayStatus) -> HabitDayStatus {
+        if currentStatus == .surplus || newStatus == .surplus {
+            return .surplus
+        }
+
+        if currentStatus == .success || newStatus == .success {
+            return .success
+        }
+
+        return .empty
+    }
+
+    private func makeHabitDays(statusByDay: [Date: HabitDayStatus], today: Date) -> [HabitDaySummary] {
         guard let startDate = calendar.date(byAdding: .day, value: -6, to: today) else {
             return []
         }
@@ -374,23 +415,23 @@ final class DashboardViewModel: ObservableObject {
             let day = calendar.startOfDay(for: date)
             return HabitDaySummary(
                 date: day,
-                isLogged: loggedDays.contains(day),
+                status: statusByDay[day] ?? .empty,
                 isToday: calendar.isDate(day, inSameDayAs: today)
             )
         }
     }
 
-    private func calculateCurrentStreak(loggedDays: Set<Date>, today: Date) -> Int {
+    private func calculateCurrentStreak(successDays: Set<Date>, today: Date) -> Int {
         var streak = 0
         var day = today
 
-        if !loggedDays.contains(day),
+        if !successDays.contains(day),
            let yesterday = calendar.date(byAdding: .day, value: -1, to: day),
-           loggedDays.contains(yesterday) {
+           successDays.contains(yesterday) {
             day = yesterday
         }
 
-        while loggedDays.contains(day) {
+        while successDays.contains(day) {
             streak += 1
             guard let previousDay = calendar.date(byAdding: .day, value: -1, to: day) else {
                 break

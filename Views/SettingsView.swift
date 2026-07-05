@@ -119,42 +119,76 @@ struct SettingsView: View {
 
     private var personalDetailsSection: some View {
         Section("About You") {
-            TextField("Name", text: $profileName)
-                .textInputAutocapitalization(.words)
+            SettingsTextFieldRow(
+                title: "Name",
+                placeholder: "Name",
+                systemImage: "person.fill",
+                tint: .blue,
+                text: $profileName,
+                keyboardType: .default
+            )
+            .textInputAutocapitalization(.words)
 
-            TextField("Weight (kg)", text: $profileWeightKg)
-                .keyboardType(.decimalPad)
-
-            TextField("Height (cm)", text: $profileHeightCm)
-                .keyboardType(.decimalPad)
-
-            DatePicker(
-                "Birth Date",
-                selection: birthDateBinding,
-                displayedComponents: .date
+            SettingsTextFieldRow(
+                title: "Weight",
+                placeholder: "kg",
+                systemImage: "scalemass.fill",
+                tint: .teal,
+                text: $profileWeightKg,
+                keyboardType: .decimalPad
             )
 
-            Picker("Sex", selection: $profileSex) {
-                ForEach(ProfileSex.allCases) { sex in
-                    Text(sex.title)
-                        .tag(sex.rawValue)
+            SettingsTextFieldRow(
+                title: "Height",
+                placeholder: "cm",
+                systemImage: "ruler.fill",
+                tint: .indigo,
+                text: $profileHeightCm,
+                keyboardType: .decimalPad
+            )
+
+            HStack(spacing: 10) {
+                FieldIcon(systemName: "calendar", tint: .orange)
+                DatePicker(
+                    "Birth Date",
+                    selection: birthDateBinding,
+                    displayedComponents: .date
+                )
+            }
+
+            HStack(spacing: 10) {
+                FieldIcon(systemName: "figure.stand", tint: .purple)
+                Picker("Sex", selection: $profileSex) {
+                    ForEach(ProfileSex.allCases) { sex in
+                        Text(sex.title)
+                            .tag(sex.rawValue)
+                    }
                 }
             }
 
-            Picker("Activity", selection: $profileActivityLevel) {
-                ForEach(ActivityLevel.allCases) { activityLevel in
-                    Text(activityLevel.title)
-                        .tag(activityLevel.rawValue)
+            HStack(spacing: 10) {
+                FieldIcon(systemName: "figure.run", tint: .green)
+                Picker("Activity", selection: $profileActivityLevel) {
+                    ForEach(ActivityLevel.allCases) { activityLevel in
+                        Text(activityLevel.title)
+                            .tag(activityLevel.rawValue)
+                    }
                 }
             }
 
             if let maintenanceCalories {
-                LabeledContent("Maintenance", value: "\(maintenanceCalories) kcal/day")
+                HStack(spacing: 10) {
+                    FieldIcon(systemName: "speedometer", tint: .red)
+                    LabeledContent("Maintenance", value: "\(maintenanceCalories) kcal/day")
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("About Me")
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    FieldIcon(systemName: "note.text", tint: .cyan)
+                    Text("About Me")
+                        .foregroundStyle(.secondary)
+                }
 
                 TextEditor(text: $profileAbout)
                     .frame(minHeight: 96)
@@ -307,6 +341,28 @@ struct SettingsView: View {
             backupMessage = "Backup imported successfully."
         } catch {
             backupMessage = "Import failed. \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct SettingsTextFieldRow: View {
+    let title: String
+    let placeholder: String
+    let systemImage: String
+    let tint: Color
+    @Binding var text: String
+    let keyboardType: UIKeyboardType
+
+    var body: some View {
+        HStack(spacing: 10) {
+            FieldIcon(systemName: systemImage, tint: tint)
+
+            Text(title)
+                .foregroundStyle(.secondary)
+
+            TextField(placeholder, text: $text)
+                .keyboardType(keyboardType)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

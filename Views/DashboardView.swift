@@ -186,13 +186,13 @@ private struct HabitDayPillView: View {
         VStack(spacing: 4) {
             ZStack {
                 Circle()
-                    .fill(day.isLogged ? Color.primary.opacity(0.10) : Color.clear)
+                    .fill(fillColor)
 
                 Circle()
                     .strokeBorder(
-                        day.isToday ? Color.primary : Color.secondary.opacity(0.55),
+                        strokeColor,
                         style: StrokeStyle(
-                            lineWidth: day.isToday ? 2.5 : 2,
+                            lineWidth: lineWidth,
                             lineCap: .round,
                             dash: strokeDash
                         )
@@ -200,17 +200,17 @@ private struct HabitDayPillView: View {
 
                 Text(weekdaySymbol)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(day.isLogged || day.isToday ? .primary : .secondary)
+                    .foregroundStyle(textColor)
             }
             .frame(width: 38, height: 38)
 
             Text(dayNumber)
                 .font(.caption.weight(day.isToday ? .bold : .regular))
-                .foregroundStyle(day.isToday ? .primary : .secondary)
+                .foregroundStyle(day.isToday ? textColor : .secondary)
                 .monospacedDigit()
 
             Circle()
-                .fill(day.isLogged ? Color.green : Color.clear)
+                .fill(indicatorColor)
                 .frame(width: 4, height: 4)
         }
     }
@@ -229,6 +229,54 @@ private struct HabitDayPillView: View {
 
     private var strokeDash: [CGFloat] {
         day.isLogged || day.isToday ? [] : [5, 5]
+    }
+
+    private var fillColor: Color {
+        switch day.status {
+        case .success:
+            return Color.green.opacity(0.16)
+        case .surplus:
+            return Color.red.opacity(0.15)
+        case .empty:
+            return Color.clear
+        }
+    }
+
+    private var strokeColor: Color {
+        switch day.status {
+        case .success:
+            return .green
+        case .surplus:
+            return .red
+        case .empty:
+            return day.isToday ? .primary : Color.secondary.opacity(0.55)
+        }
+    }
+
+    private var textColor: Color {
+        switch day.status {
+        case .success:
+            return .green
+        case .surplus:
+            return .red
+        case .empty:
+            return day.isToday ? .primary : .secondary
+        }
+    }
+
+    private var indicatorColor: Color {
+        switch day.status {
+        case .success:
+            return .green
+        case .surplus:
+            return .red
+        case .empty:
+            return .clear
+        }
+    }
+
+    private var lineWidth: CGFloat {
+        day.isToday ? 2.5 : 2
     }
 }
 
