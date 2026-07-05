@@ -18,6 +18,30 @@ final class NetworkManager {
     }
 
     func estimateCalories(fromBase64Image base64Image: String) async throws -> NutritionEstimate {
+        try await requestNutritionEstimate(
+            parts: [
+                GeminiPart(text: GeminiConfiguration.nutritionistSystemPrompt),
+                GeminiPart(text: "Analyze this food image."),
+                GeminiPart(inlineData: GeminiInlineData(mimeType: "image/jpeg", data: base64Image))
+            ]
+        )
+    }
+
+    func estimateNutrition(foodName: String, grams: Int) async throws -> NutritionEstimate {
+        let cleanedFoodName = foodName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedFoodName.isEmpty, grams > 0 else {
+            throw NetworkManagerError.invalidEstimate
+        }
+
+        return try await requestNutritionEstimate(
+            parts: [
+                GeminiPart(text: GeminiConfiguration.nutritionTextGuessSystemPrompt),
+                GeminiPart(text: GeminiConfiguration.nutritionTextGuessUserPrompt(foodName: cleanedFoodName, grams: grams))
+            ]
+        )
+    }
+
+    private func requestNutritionEstimate(parts: [GeminiPart]) async throws -> NutritionEstimate {
         let apiKey = GeminiConfiguration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
             throw NetworkManagerError.missingAPIKey
@@ -32,11 +56,7 @@ final class NetworkManager {
             contents: [
                 GeminiContent(
                     role: "user",
-                    parts: [
-                        GeminiPart(text: GeminiConfiguration.nutritionistSystemPrompt),
-                        GeminiPart(text: "Analyze this food image."),
-                        GeminiPart(inlineData: GeminiInlineData(mimeType: "image/jpeg", data: base64Image))
-                    ]
+                    parts: parts
                 )
             ],
             generationConfig: GeminiGenerationConfig(responseMimeType: "application/json")
