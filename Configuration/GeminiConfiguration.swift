@@ -6,6 +6,8 @@ enum GeminiConfiguration {
     }
     static let imageModel = "gemini-3.5-flash"
     static let textModel = "gemini-3.1-flash-lite"
+    static let imageFallbackModels = ["gemini-3.1-pro-preview", "gemini-2.5-flash"]
+    static let textFallbackModels = ["gemini-2.5-flash"]
 
     static func generateContentURL(model: String, apiKey: String) -> URL {
         var components = URLComponents()

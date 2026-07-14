@@ -67,6 +67,101 @@ final class NetworkManagerTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestCount, 2)
     }
 
+    func testTextEstimateFallsBackToGemini25WhenPrimaryIsUnavailable() async throws {
+        StubURLProtocol.setHandler { request in
+            if StubURLProtocol.requestCount == 1 {
+                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.textModel) == true)
+                return Self.response(
+                    for: request,
+                    statusCode: 503,
+                    data: Self.errorResponse(message: "Temporarily unavailable")
+                )
+            }
+
+            XCTAssertTrue(
+                request.url?.absoluteString.contains(GeminiConfiguration.textFallbackModels[0]) == true
+            )
+            return Self.response(
+                for: request,
+                statusCode: 200,
+                data: Self.validGeminiResponse()
+            )
+        }
+
+        let manager = makeManager(retryCount: 0)
+        let estimate = try await manager.estimateNutrition(foodName: "Greek yogurt", grams: 200)
+
+        XCTAssertEqual(estimate.estimatedCalories, 297)
+        XCTAssertEqual(StubURLProtocol.requestCount, 2)
+    }
+
+    func testImageEstimateFallsBackToGemini31ProWhenPrimaryIsUnavailable() async throws {
+        StubURLProtocol.setHandler { request in
+            if StubURLProtocol.requestCount == 1 {
+                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
+                return Self.response(
+                    for: request,
+                    statusCode: 503,
+                    data: Self.errorResponse(message: "Temporarily unavailable")
+                )
+            }
+
+            XCTAssertTrue(
+                request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[0]) == true
+            )
+            return Self.response(
+                for: request,
+                statusCode: 200,
+                data: Self.validGeminiResponse()
+            )
+        }
+
+        let manager = makeManager(retryCount: 0)
+        let estimate = try await manager.estimateCalories(fromBase64Image: "test-image-payload")
+
+        XCTAssertEqual(estimate.estimatedCalories, 297)
+        XCTAssertEqual(StubURLProtocol.requestCount, 2)
+    }
+
+    func testImageEstimateFallsBackToGemini25WhenProFallbackIsUnavailable() async throws {
+        StubURLProtocol.setHandler { request in
+            if StubURLProtocol.requestCount == 1 {
+                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
+                return Self.response(
+                    for: request,
+                    statusCode: 503,
+                    data: Self.errorResponse(message: "Temporarily unavailable")
+                )
+            }
+
+            if StubURLProtocol.requestCount == 2 {
+                XCTAssertTrue(
+                    request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[0]) == true
+                )
+                return Self.response(
+                    for: request,
+                    statusCode: 503,
+                    data: Self.errorResponse(message: "Pro temporarily unavailable")
+                )
+            }
+
+            XCTAssertTrue(
+                request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[1]) == true
+            )
+            return Self.response(
+                for: request,
+                statusCode: 200,
+                data: Self.validGeminiResponse()
+            )
+        }
+
+        let manager = makeManager(retryCount: 0)
+        let estimate = try await manager.estimateCalories(fromBase64Image: "test-image-payload")
+
+        XCTAssertEqual(estimate.estimatedCalories, 297)
+        XCTAssertEqual(StubURLProtocol.requestCount, 3)
+    }
+
     func testLongRateLimitDoesNotRetryImmediately() async throws {
         StubURLProtocol.setHandler { request in
             Self.response(

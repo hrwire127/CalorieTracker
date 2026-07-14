@@ -7,7 +7,7 @@
 - Manual entry with image attachment and editable calories/macros/health score.
 - Manual entry AI Guess tab using food name + grams to estimate nutrition.
 - AI camera/photo entry using Gemini, with editable confirmation before saving.
-- Gemini requests use system instructions, JSON Schema, typed errors, bounded retry, one-at-a-time execution, request coalescing, cache, and local `429` cooldown.
+- Gemini requests use system instructions, JSON Schema, typed errors, bounded retry, image fallback through Gemini 3.1 Pro Preview then Gemini 2.5 Flash for transient provider/model failures, one-at-a-time execution, request coalescing, cache, and local `429` cooldown.
 - AI image payloads are resized/compressed before upload; failed scans retain the photo for manual completion.
 - Food item editing from dashboard/history.
 - Stats screen with 7D/1M/3M ranges, chart, goal line, maintenance line, average deficit/surplus, completed/missed days, net kcal lost/gained.
@@ -16,7 +16,7 @@
 - Validated backup export/import for meals, goals, profile, settings, and current targets. API keys are intentionally excluded.
 - Streak bar colors days as success/surplus/empty.
 - Codemagic screenshot workflow exports PNGs from UI test attachments.
-- Codemagic simulator workflow runs 16 unit tests covering AI, persistence, backup, and validation.
+- Codemagic simulator workflow runs 19 unit tests covering AI, persistence, backup, validation, and Gemini fallback behavior.
 
 ## Unfinished / Next Useful Work
 - Run the Codemagic `ios-simulator-build` workflow to compile and execute the new unit tests.
@@ -28,7 +28,7 @@
 
 ## Known Bugs / Risks
 - Local iOS builds cannot be validated on this Windows workspace.
-- Gemini model availability, quotas, and API behavior can change; typed errors reduce impact but cannot remove provider outages.
+- Gemini model availability, quotas, and API behavior can change; typed errors and Gemini 2.5 fallback reduce impact but cannot remove provider outages or quota limits.
 - SwiftData + CloudKit is configured as `.automatic`; behavior depends on entitlements/signing environment.
 - Screenshot extraction in Codemagic has a fallback that copies PNGs from `.xcresult/Data`; keep this if `xcresulttool` changes.
 - History currently fetches only the visible period; calendar heat colors outside that period are intentionally unavailable.

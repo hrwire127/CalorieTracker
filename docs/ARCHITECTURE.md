@@ -18,7 +18,7 @@ Image AI:
 Text AI:
 `ManualEntryView` AI Guess tab -> `ManualEntryViewModel` -> `NutritionEstimating` -> `NetworkManager` -> Gemini Flash-Lite -> editable fields -> SwiftData.
 
-Gemini responses are constrained by JSON Schema and validated again locally. Temporary server failures receive bounded retry. Rate limits create a local cooldown, identical requests share one in-flight task, and successful estimates are cached briefly.
+Gemini responses are constrained by JSON Schema and validated again locally. Temporary server failures receive bounded retry, then image requests fall back through Gemini 3.1 Pro Preview and Gemini 2.5 Flash when appropriate. Rate limits create a local cooldown instead of model hopping, identical requests share one in-flight task, and successful estimates are cached briefly.
 
 ## Persistence
 - `DailyGoal` and `FoodItem` are SwiftData `@Model` types.
@@ -82,7 +82,7 @@ mindmap
       NetworkManager
         Gemini Image Estimate
         Gemini Text Estimate
-        Retry and Cooldown
+        Retry Fallback Cooldown
         Coalescing and Cache
     Utilities
       FoodEntryValidator
@@ -100,6 +100,6 @@ mindmap
 - Keep model changes conservative; add migration planning before changing persisted model shape.
 - Prefer adding helper structs/functions near related views unless shared across screens.
 - Keep AI responses parsed through `NutritionEstimate`.
-- Keep external AI calls behind `NutritionEstimating` and cover new status handling with mocked `URLProtocol` tests.
+- Keep external AI calls behind `NutritionEstimating` and cover new status/fallback handling with mocked `URLProtocol` tests.
 - Preserve confirmation/edit-before-save behavior for AI outputs.
 - Keep Codemagic workflows working from generated XcodeGen project.

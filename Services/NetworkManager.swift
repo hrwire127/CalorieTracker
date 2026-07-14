@@ -31,7 +31,7 @@ actor NetworkManager: NutritionEstimating {
         session: URLSession = .shared,
         decoder: JSONDecoder = JSONDecoder(),
         encoder: JSONEncoder = JSONEncoder(),
-        retryCount: Int = 2,
+        retryCount: Int = 1,
         cacheLifetime: TimeInterval = 15 * 60,
         maximumAutomaticRetryDelay: TimeInterval = 8,
         apiKeyProvider: @escaping () -> String = { GeminiConfiguration.apiKey },
@@ -68,7 +68,7 @@ actor NetworkManager: NutritionEstimating {
         return try await estimate(
             key: .image(Self.sha256(cleanedImage)),
             request: request,
-            model: GeminiConfiguration.imageModel,
+            models: [GeminiConfiguration.imageModel] + GeminiConfiguration.imageFallbackModels,
             expectedGrams: nil
         )
     }
@@ -94,7 +94,7 @@ actor NetworkManager: NutritionEstimating {
         return try await estimate(
             key: .text(cleanedFoodName.lowercased(), grams),
             request: request,
-            model: GeminiConfiguration.textModel,
+            models: [GeminiConfiguration.textModel] + GeminiConfiguration.textFallbackModels,
             expectedGrams: grams
         )
     }
@@ -102,7 +102,7 @@ actor NetworkManager: NutritionEstimating {
     private func estimate(
         key: RequestKey,
         request: GeminiRequest,
-        model: String,
+        models: [String],
         expectedGrams: Int?
     ) async throws -> NutritionEstimate {
         removeExpiredCacheEntries()
@@ -118,7 +118,7 @@ actor NetworkManager: NutritionEstimating {
         let task = Task {
             try await requestNutritionEstimate(
                 request,
-                model: model,
+                models: models,
                 expectedGrams: expectedGrams
             )
         }
@@ -137,8 +137,38 @@ actor NetworkManager: NutritionEstimating {
 
     private func requestNutritionEstimate(
         _ requestBody: GeminiRequest,
-        model: String,
+        models: [String],
         expectedGrams: Int?
+    ) async throws -> NutritionEstimate {
+        let availableModels = models.isEmpty ? [GeminiConfiguration.imageModel] : models
+        var lastFailure: NetworkManagerError?
+
+        for (index, model) in availableModels.enumerated() {
+            do {
+                return try await requestNutritionEstimateWithRetry(
+                    requestBody,
+                    model: model,
+                    expectedGrams: expectedGrams,
+                    retryLimit: index == 0 ? retryCount : 0
+                )
+            } catch let error as NetworkManagerError {
+                lastFailure = error
+
+                guard index < availableModels.count - 1,
+                      error.isModelFallbackEligible else {
+                    throw error
+                }
+            }
+        }
+
+        throw lastFailure ?? NetworkManagerError.invalidResponse
+    }
+
+    private func requestNutritionEstimateWithRetry(
+        _ requestBody: GeminiRequest,
+        model: String,
+        expectedGrams: Int?,
+        retryLimit: Int
     ) async throws -> NutritionEstimate {
         var completedRetries = 0
 
@@ -158,7 +188,7 @@ actor NetworkManager: NutritionEstimating {
             } catch let error as NetworkManagerError {
                 recordRateLimitIfNeeded(error)
 
-                guard completedRetries < retryCount,
+                guard completedRetries < retryLimit,
                       let delay = automaticRetryDelay(for: error, retryNumber: completedRetries) else {
                     throw error
                 }
@@ -536,6 +566,16 @@ enum NetworkManagerError: LocalizedError {
         switch self {
         case .rateLimited, .serviceUnavailable, .invalidResponse, .emptyResponse,
              .decodingFailed, .invalidEstimate, .transport:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var isModelFallbackEligible: Bool {
+        switch self {
+        case .serviceUnavailable, .modelUnavailable, .invalidResponse,
+             .emptyResponse, .decodingFailed, .invalidEstimate:
             return true
         default:
             return false

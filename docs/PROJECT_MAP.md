@@ -23,7 +23,7 @@
 - `Models/DailyGoal.swift` - daily calorie/macro target and relationship to food items.
 - `Models/FoodItem.swift` - meal entry model with calories, macros, grams, image data.
 - `Models/DailyGoalTargets.swift` - persistent current diet targets.
-- `Services/NetworkManager.swift` - Gemini image analysis and text nutrition guess.
+- `Services/NetworkManager.swift` - Gemini image analysis, text nutrition guess, retry, cooldown, and fallback models.
 - `Utilities/DailyGoalStore.swift` - canonical daily-goal fetch and duplicate-day consolidation.
 - `ViewModels/AIRequestFailure.swift` - actionable user-facing AI error state.
 - `Views/DashboardView.swift` - main calorie ring, streak bar, today food list.
