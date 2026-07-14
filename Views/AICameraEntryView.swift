@@ -35,7 +35,7 @@ struct AICameraEntryView: View {
                 }
 
                 if viewModel.isAnalyzing {
-                    ProgressView("Analyzing")
+                    ProgressView("Analyzing or waiting for API")
                         .padding(.top, 4)
                 }
 

@@ -19,8 +19,10 @@ actor NetworkManager: NutritionEstimating {
     private let nowProvider: () -> Date
     private let jitterProvider: () -> TimeInterval
     private let retryCount: Int
+    private let rateLimitRetryCount: Int
     private let cacheLifetime: TimeInterval
     private let maximumAutomaticRetryDelay: TimeInterval
+    private let minimumRateLimitRetryDelay: TimeInterval
     private let requestGate = AIRequestGate()
 
     private var cache: [RequestKey: CacheEntry] = [:]
@@ -32,8 +34,10 @@ actor NetworkManager: NutritionEstimating {
         decoder: JSONDecoder = JSONDecoder(),
         encoder: JSONEncoder = JSONEncoder(),
         retryCount: Int = 1,
+        rateLimitRetryCount: Int = 3,
         cacheLifetime: TimeInterval = 15 * 60,
-        maximumAutomaticRetryDelay: TimeInterval = 8,
+        maximumAutomaticRetryDelay: TimeInterval = 180,
+        minimumRateLimitRetryDelay: TimeInterval = 30,
         apiKeyProvider: @escaping () -> String = { GeminiConfiguration.apiKey },
         sleepHandler: @escaping SleepHandler = NetworkManager.defaultSleep,
         nowProvider: @escaping () -> Date = Date.init,
@@ -43,8 +47,10 @@ actor NetworkManager: NutritionEstimating {
         self.decoder = decoder
         self.encoder = encoder
         self.retryCount = max(retryCount, 0)
+        self.rateLimitRetryCount = max(rateLimitRetryCount, 0)
         self.cacheLifetime = max(cacheLifetime, 0)
         self.maximumAutomaticRetryDelay = max(maximumAutomaticRetryDelay, 0)
+        self.minimumRateLimitRetryDelay = max(minimumRateLimitRetryDelay, 0)
         self.apiKeyProvider = apiKeyProvider
         self.sleepHandler = sleepHandler
         self.nowProvider = nowProvider
@@ -149,13 +155,14 @@ actor NetworkManager: NutritionEstimating {
                     requestBody,
                     model: model,
                     expectedGrams: expectedGrams,
-                    retryLimit: index == 0 ? retryCount : 0
+                    retryLimit: index == 0 ? retryCount : 0,
+                    rateLimitRetryLimit: index == 0 ? rateLimitRetryCount : 0
                 )
             } catch let error as NetworkManagerError {
                 lastFailure = error
 
                 guard index < availableModels.count - 1,
-                      error.isModelFallbackEligible else {
+                      shouldTryNextModel(after: error, failedModelIndex: index) else {
                     throw error
                 }
             }
@@ -168,15 +175,27 @@ actor NetworkManager: NutritionEstimating {
         _ requestBody: GeminiRequest,
         model: String,
         expectedGrams: Int?,
-        retryLimit: Int
+        retryLimit: Int,
+        rateLimitRetryLimit: Int
     ) async throws -> NutritionEstimate {
         var completedRetries = 0
+        var completedRateLimitRetries = 0
 
         while true {
             try Task.checkCancellation()
 
             if let rateLimitError = activeRateLimitError() {
-                throw rateLimitError
+                guard completedRateLimitRetries < rateLimitRetryLimit,
+                      let delay = automaticRetryDelay(
+                        for: rateLimitError,
+                        retryNumber: completedRateLimitRetries
+                      ) else {
+                    throw rateLimitError
+                }
+
+                completedRateLimitRetries += 1
+                try await sleepHandler(delay)
+                continue
             }
 
             do {
@@ -188,18 +207,53 @@ actor NetworkManager: NutritionEstimating {
             } catch let error as NetworkManagerError {
                 recordRateLimitIfNeeded(error)
 
-                guard completedRetries < retryLimit,
-                      let delay = automaticRetryDelay(for: error, retryNumber: completedRetries) else {
+                let retryNumber: Int
+                let allowedRetries: Int
+                if case .rateLimited = error {
+                    retryNumber = completedRateLimitRetries
+                    allowedRetries = rateLimitRetryLimit
+                } else {
+                    retryNumber = completedRetries
+                    allowedRetries = retryLimit
+                }
+
+                guard retryNumber < allowedRetries,
+                      let delay = automaticRetryDelay(for: error, retryNumber: retryNumber) else {
                     throw error
                 }
 
-                completedRetries += 1
+                if case .rateLimited = error {
+                    completedRateLimitRetries += 1
+                } else {
+                    completedRetries += 1
+                }
+
                 try await sleepHandler(delay)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
                 throw NetworkManagerError.invalidResponse
             }
+        }
+    }
+
+    private func shouldTryNextModel(
+        after error: NetworkManagerError,
+        failedModelIndex: Int
+    ) -> Bool {
+        if error.isModelFallbackEligible {
+            return true
+        }
+
+        guard failedModelIndex > 0 else {
+            return false
+        }
+
+        switch error {
+        case .authorizationFailed, .rateLimited:
+            return true
+        default:
+            return false
         }
     }
 
@@ -374,10 +428,11 @@ actor NetworkManager: NutritionEstimating {
 
         switch error {
         case .rateLimited(let retryAfter):
-            guard retryNumber == 0 else {
-                return nil
-            }
-            baseDelay = retryAfter ?? 5
+            let fallbackDelay = min(
+                minimumRateLimitRetryDelay * pow(2, Double(retryNumber)),
+                maximumAutomaticRetryDelay
+            )
+            baseDelay = max(retryAfter ?? fallbackDelay, minimumRateLimitRetryDelay)
         case .serviceUnavailable:
             baseDelay = pow(2, Double(retryNumber))
         case .transport(let error) where Self.isRetryableTransportError(error):
@@ -458,7 +513,15 @@ actor NetworkManager: NutritionEstimating {
             return
         }
 
-        rateLimitedUntil = nowProvider().addingTimeInterval(max(retryAfter ?? 5, 0.5))
+        let proposedCooldown = nowProvider().addingTimeInterval(
+            max(retryAfter ?? minimumRateLimitRetryDelay, minimumRateLimitRetryDelay, 0.5)
+        )
+
+        if let rateLimitedUntil, rateLimitedUntil > proposedCooldown {
+            return
+        }
+
+        rateLimitedUntil = proposedCooldown
     }
 
     private func activeRateLimitError() -> NetworkManagerError? {

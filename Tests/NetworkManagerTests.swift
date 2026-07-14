@@ -162,6 +162,46 @@ final class NetworkManagerTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestCount, 3)
     }
 
+    func testImageEstimateFallsBackToGemini25WhenProFallbackIsRateLimited() async throws {
+        StubURLProtocol.setHandler { request in
+            if StubURLProtocol.requestCount == 1 {
+                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
+                return Self.response(
+                    for: request,
+                    statusCode: 503,
+                    data: Self.errorResponse(message: "Temporarily unavailable")
+                )
+            }
+
+            if StubURLProtocol.requestCount == 2 {
+                XCTAssertTrue(
+                    request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[0]) == true
+                )
+                return Self.response(
+                    for: request,
+                    statusCode: 429,
+                    headers: ["Retry-After": "30"],
+                    data: Self.errorResponse(message: "Preview model rate limited")
+                )
+            }
+
+            XCTAssertTrue(
+                request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[1]) == true
+            )
+            return Self.response(
+                for: request,
+                statusCode: 200,
+                data: Self.validGeminiResponse()
+            )
+        }
+
+        let manager = makeManager(retryCount: 0, rateLimitRetryCount: 1)
+        let estimate = try await manager.estimateCalories(fromBase64Image: "test-image-payload")
+
+        XCTAssertEqual(estimate.estimatedCalories, 297)
+        XCTAssertEqual(StubURLProtocol.requestCount, 3)
+    }
+
     func testLongRateLimitDoesNotRetryImmediately() async throws {
         StubURLProtocol.setHandler { request in
             Self.response(
@@ -172,7 +212,7 @@ final class NetworkManagerTests: XCTestCase {
             )
         }
 
-        let manager = makeManager(retryCount: 2)
+        let manager = makeManager(retryCount: 2, rateLimitRetryCount: 0)
 
         do {
             _ = try await manager.estimateNutrition(foodName: "Rice", grams: 100)
@@ -196,6 +236,45 @@ final class NetworkManagerTests: XCTestCase {
         }
 
         XCTAssertEqual(StubURLProtocol.requestCount, 1)
+    }
+
+    func testRateLimitWaitsAndRetriesAutomatically() async throws {
+        var now = Date()
+        var sleepDelays: [TimeInterval] = []
+
+        StubURLProtocol.setHandler { request in
+            if StubURLProtocol.requestCount == 1 {
+                return Self.response(
+                    for: request,
+                    statusCode: 429,
+                    headers: ["Retry-After": "30"],
+                    data: Self.errorResponse(message: "Resource exhausted")
+                )
+            }
+
+            return Self.response(
+                for: request,
+                statusCode: 200,
+                data: Self.validGeminiResponse()
+            )
+        }
+
+        let manager = makeManager(
+            retryCount: 0,
+            rateLimitRetryCount: 1,
+            maximumAutomaticRetryDelay: 60,
+            nowProvider: { now },
+            sleepHandler: { seconds in
+                sleepDelays.append(seconds)
+                now = now.addingTimeInterval(seconds)
+            }
+        )
+
+        let estimate = try await manager.estimateNutrition(foodName: "Rice", grams: 100)
+
+        XCTAssertEqual(estimate.estimatedCalories, 297)
+        XCTAssertEqual(StubURLProtocol.requestCount, 2)
+        XCTAssertEqual(sleepDelays, [30])
     }
 
     func testAuthorizationErrorIsNotRetried() async throws {
@@ -279,7 +358,13 @@ final class NetworkManagerTests: XCTestCase {
         }
     }
 
-    private func makeManager(retryCount: Int = 0) -> NetworkManager {
+    private func makeManager(
+        retryCount: Int = 0,
+        rateLimitRetryCount: Int = 3,
+        maximumAutomaticRetryDelay: TimeInterval = 8,
+        nowProvider: @escaping () -> Date = Date.init,
+        sleepHandler: @escaping NetworkManager.SleepHandler = { _ in }
+    ) -> NetworkManager {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
         let session = URLSession(configuration: configuration)
@@ -287,10 +372,12 @@ final class NetworkManagerTests: XCTestCase {
         return NetworkManager(
             session: session,
             retryCount: retryCount,
+            rateLimitRetryCount: rateLimitRetryCount,
             cacheLifetime: 60,
-            maximumAutomaticRetryDelay: 8,
+            maximumAutomaticRetryDelay: maximumAutomaticRetryDelay,
             apiKeyProvider: { "test-api-key" },
-            sleepHandler: { _ in },
+            sleepHandler: sleepHandler,
+            nowProvider: nowProvider,
             jitterProvider: { 0 }
         )
     }

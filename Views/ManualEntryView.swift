@@ -119,7 +119,7 @@ struct ManualEntryView: View {
                         Image(systemName: "sparkles")
                     }
 
-                    Text(viewModel.isGuessingNutrition ? "Guessing" : "AI Guess")
+                    Text(viewModel.isGuessingNutrition ? "Working" : "AI Guess")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
