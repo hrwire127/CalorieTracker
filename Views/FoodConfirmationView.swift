@@ -22,7 +22,7 @@ struct FoodConfirmationView: View {
         onSave: @escaping (String, Int, Int?, Int?, Int?, Int?, Int?, Data?) -> Void
     ) {
         _foodName = State(initialValue: draft.foodName)
-        _caloriesText = State(initialValue: "\(draft.calories)")
+        _caloriesText = State(initialValue: draft.calories > 0 ? "\(draft.calories)" : "")
         _gramsText = State(initialValue: draft.grams.map { String($0) } ?? "")
         _proteinText = State(initialValue: draft.proteinGrams.map { String($0) } ?? "")
         _carbText = State(initialValue: draft.carbGrams.map { String($0) } ?? "")

@@ -39,7 +39,7 @@ struct AICameraEntryView: View {
                         .padding(.top, 4)
                 }
 
-                if viewModel.canRetryAnalysis {
+                if viewModel.canRetryFailure {
                     Button {
                         Task {
                             await viewModel.retryLastAnalysis()
@@ -50,6 +50,16 @@ struct AICameraEntryView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(viewModel.isAnalyzing)
+                }
+
+                if viewModel.failure != nil, viewModel.canContinueManually {
+                    Button {
+                        viewModel.prepareManualEntry()
+                    } label: {
+                        Label("Enter Details Manually", systemImage: "square.and.pencil")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 Spacer(minLength: 0)
@@ -91,12 +101,18 @@ struct AICameraEntryView: View {
                     dismiss()
                 }
             }
-            .alert("AI Analysis", isPresented: errorBinding) {
-                if viewModel.canRetryAnalysis {
+            .alert(viewModel.errorTitle, isPresented: errorBinding) {
+                if viewModel.canRetryFailure {
                     Button("Retry") {
                         Task {
                             await viewModel.retryLastAnalysis()
                         }
+                    }
+                }
+
+                if viewModel.canContinueManually {
+                    Button("Enter Manually") {
+                        viewModel.prepareManualEntry()
                     }
                 }
 
@@ -152,7 +168,10 @@ struct AICameraEntryView: View {
 
     private func openCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            viewModel.errorMessage = "Camera is not available on this device."
+            viewModel.showLocalError(
+                title: "Camera Unavailable",
+                message: "Camera is not available on this device."
+            )
             return
         }
 
@@ -163,7 +182,10 @@ struct AICameraEntryView: View {
                 if hasAccess {
                     isShowingCamera = true
                 } else {
-                    viewModel.errorMessage = "Camera access is required to capture food photos."
+                    viewModel.showLocalError(
+                        title: "Camera Access Required",
+                        message: "Allow camera access in Settings to capture food photos."
+                    )
                 }
             }
         }

@@ -18,10 +18,19 @@ struct CalorieTrackerApp: App {
                 cloudKitDatabase: .automatic
             )
 
-            modelContainer = try ModelContainer(
+            let container = try ModelContainer(
                 for: schema,
                 configurations: [modelConfiguration]
             )
+            do {
+                try DailyGoalStore.consolidateDuplicateDays(in: container.mainContext)
+                if container.mainContext.hasChanges {
+                    try container.mainContext.save()
+                }
+            } catch {
+                container.mainContext.rollback()
+            }
+            modelContainer = container
         } catch {
             fatalError("Failed to initialize SwiftData container: \(error)")
         }

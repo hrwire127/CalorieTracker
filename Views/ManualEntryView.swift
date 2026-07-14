@@ -65,7 +65,20 @@ struct ManualEntryView: View {
             .onChange(of: selectedMode) { _, _ in
                 focusedField = .name
             }
-            .alert("AI Guess", isPresented: errorBinding) {
+            .alert(viewModel.errorTitle, isPresented: errorBinding) {
+                if viewModel.canRetryFailure {
+                    Button("Retry") {
+                        Task {
+                            await viewModel.guessNutrition()
+                        }
+                    }
+                }
+
+                Button("Continue Manually") {
+                    viewModel.clearError()
+                    selectedMode = .manual
+                }
+
                 Button("OK", role: .cancel) {
                     viewModel.clearError()
                 }
@@ -112,6 +125,12 @@ struct ManualEntryView: View {
                 .frame(maxWidth: .infinity)
             }
             .disabled(!viewModel.canGuessNutrition)
+
+            if viewModel.hasAIResult {
+                Label("Estimate ready to review", systemImage: "checkmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.green)
+            }
         }
 
         Section("Editable Estimate") {

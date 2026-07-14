@@ -1,1 +1,8 @@
 CalorieTracker_*_artifacts/
+build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+*.xcresult/
+*.ipa
+.DS_Store

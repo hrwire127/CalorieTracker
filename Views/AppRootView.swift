@@ -5,6 +5,7 @@ struct AppRootView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("AppThemePreference") private var appThemePreference = AppThemePreference.system.rawValue
     @State private var isShowingAIEntry = false
+    @State private var persistenceErrorMessage: String?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -70,6 +71,13 @@ struct AppRootView: View {
                 )
             }
         }
+        .alert("Unable to Save", isPresented: persistenceErrorBinding) {
+            Button("OK", role: .cancel) {
+                persistenceErrorMessage = nil
+            }
+        } message: {
+            Text(persistenceErrorMessage ?? "")
+        }
     }
 
     private var selectedTheme: AppThemePreference {
@@ -86,15 +94,19 @@ struct AppRootView: View {
         healthScore: Int?,
         imageData: Data?
     ) {
-        guard let entry = try? FoodEntryValidator.validate(
-            name: name,
-            calories: calories,
-            grams: grams,
-            proteinGrams: proteinGrams,
-            carbGrams: carbGrams,
-            fatGrams: fatGrams,
-            healthScore: healthScore
-        ) else {
+        let entry: ValidatedFoodEntry
+        do {
+            entry = try FoodEntryValidator.validate(
+                name: name,
+                calories: calories,
+                grams: grams,
+                proteinGrams: proteinGrams,
+                carbGrams: carbGrams,
+                fatGrams: fatGrams,
+                healthScore: healthScore
+            )
+        } catch {
+            persistenceErrorMessage = error.localizedDescription
             return
         }
 
@@ -127,7 +139,8 @@ struct AppRootView: View {
             try modelContext.save()
             NotificationCenter.default.post(name: .foodItemsDidChange, object: nil)
         } catch {
-            // Dashboard will surface persistence errors when it reloads.
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
         }
     }
 
@@ -158,34 +171,21 @@ struct AppRootView: View {
     }
 
     private func fetchLatestGoalBeforeToday() throws -> DailyGoal? {
-        let startOfToday = Calendar.current.startOfDay(for: Date())
-        var descriptor = FetchDescriptor<DailyGoal>(
-            predicate: #Predicate<DailyGoal> { goal in
-                goal.date < startOfToday
-            },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.fetchLimit = 1
-
-        return try modelContext.fetch(descriptor).first
+        try DailyGoalStore.latestGoal(before: Date(), in: modelContext)
     }
 
     private func fetchTodayGoal() throws -> DailyGoal? {
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: Date())
-        guard let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
-            return nil
+        try DailyGoalStore.goal(for: Date(), in: modelContext)
+    }
+
+    private var persistenceErrorBinding: Binding<Bool> {
+        Binding {
+            persistenceErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                persistenceErrorMessage = nil
+            }
         }
-
-        var descriptor = FetchDescriptor<DailyGoal>(
-            predicate: #Predicate<DailyGoal> { goal in
-                goal.date >= startOfToday && goal.date < startOfTomorrow
-            },
-            sortBy: [SortDescriptor(\.date)]
-        )
-        descriptor.fetchLimit = 1
-
-        return try modelContext.fetch(descriptor).first
     }
 }
 

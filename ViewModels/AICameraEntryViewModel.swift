@@ -7,18 +7,35 @@ import UIKit
 @MainActor
 final class AICameraEntryViewModel: ObservableObject {
     @Published private(set) var selectedImage: UIImage?
+    @Published private(set) var selectedImageData: Data?
     @Published var pendingDraft: FoodEstimateDraft?
     @Published private(set) var isAnalyzing = false
-    @Published var errorMessage: String?
+    @Published private(set) var failure: AIRequestFailure?
 
-    private let networkManager: NetworkManager
+    private let networkManager: any NutritionEstimating
 
-    init(networkManager: NetworkManager = .shared) {
+    init(networkManager: any NutritionEstimating = NetworkManager.shared) {
         self.networkManager = networkManager
+    }
+
+    var errorMessage: String? {
+        failure?.message
+    }
+
+    var errorTitle: String {
+        failure?.title ?? "AI Analysis"
     }
 
     var canRetryAnalysis: Bool {
         selectedImage != nil && !isAnalyzing
+    }
+
+    var canRetryFailure: Bool {
+        failure?.canRetry == true && canRetryAnalysis
+    }
+
+    var canContinueManually: Bool {
+        selectedImageData != nil && !isAnalyzing
     }
 
     func loadPhoto(from item: PhotosPickerItem) async {
@@ -35,46 +52,92 @@ final class AICameraEntryViewModel: ObservableObject {
     }
 
     func analyze(image: UIImage) async {
-        isAnalyzing = true
-        errorMessage = nil
+        guard beginAnalysis() else {
+            return
+        }
+
         defer { isAnalyzing = false }
 
         do {
             let compressedData = try ImageProcessor.compressedJPEGData(from: image)
             let previewImage = UIImage(data: compressedData) ?? image
             selectedImage = previewImage
-
-            let base64Image = compressedData.base64EncodedString()
-            let estimate = try await networkManager.estimateCalories(fromBase64Image: base64Image)
-
-            pendingDraft = FoodEstimateDraft(
-                foodName: estimate.foodName,
-                calories: estimate.estimatedCalories,
-                grams: estimate.estimatedGrams,
-                proteinGrams: estimate.estimatedProteinGrams,
-                carbGrams: estimate.estimatedCarbGrams,
-                fatGrams: estimate.estimatedFatGrams,
-                healthScore: estimate.healthScore,
-                imageData: compressedData
-            )
+            selectedImageData = compressedData
+            try await populateDraft(using: compressedData)
         } catch {
             showError(error)
         }
     }
 
     func retryLastAnalysis() async {
-        guard let selectedImage else {
+        guard let selectedImageData, beginAnalysis() else {
             return
         }
 
-        await analyze(image: selectedImage)
+        defer { isAnalyzing = false }
+
+        do {
+            try await populateDraft(using: selectedImageData)
+        } catch {
+            showError(error)
+        }
     }
 
     func clearError() {
-        errorMessage = nil
+        failure = nil
+    }
+
+    func prepareManualEntry() {
+        guard let selectedImageData else {
+            return
+        }
+
+        failure = nil
+        pendingDraft = FoodEstimateDraft(
+            foodName: "",
+            calories: 0,
+            grams: nil,
+            proteinGrams: nil,
+            carbGrams: nil,
+            fatGrams: nil,
+            healthScore: nil,
+            imageData: selectedImageData
+        )
+    }
+
+    func showLocalError(title: String, message: String, canRetry: Bool = false) {
+        failure = AIRequestFailure(title: title, message: message, canRetry: canRetry)
     }
 
     private func showError(_ error: Error) {
-        errorMessage = error.localizedDescription
+        failure = AIRequestFailure(error: error, fallbackTitle: "AI Analysis")
+    }
+
+    private func beginAnalysis() -> Bool {
+        guard !isAnalyzing else {
+            return false
+        }
+
+        isAnalyzing = true
+        failure = nil
+        pendingDraft = nil
+        return true
+    }
+
+    private func populateDraft(using imageData: Data) async throws {
+        let estimate = try await networkManager.estimateCalories(
+            fromBase64Image: imageData.base64EncodedString()
+        )
+
+        pendingDraft = FoodEstimateDraft(
+            foodName: estimate.foodName,
+            calories: estimate.estimatedCalories,
+            grams: estimate.estimatedGrams,
+            proteinGrams: estimate.estimatedProteinGrams,
+            carbGrams: estimate.estimatedCarbGrams,
+            fatGrams: estimate.estimatedFatGrams,
+            healthScore: estimate.healthScore,
+            imageData: imageData
+        )
     }
 }

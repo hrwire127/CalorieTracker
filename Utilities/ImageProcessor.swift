@@ -3,8 +3,9 @@ import UIKit
 enum ImageProcessor {
     static func compressedJPEGData(
         from image: UIImage,
-        maxDimension: CGFloat = 1_024,
-        compressionQuality: CGFloat = 0.72
+        maxDimension: CGFloat = 768,
+        compressionQuality: CGFloat = 0.66,
+        maximumByteCount: Int = 900_000
     ) throws -> Data {
         guard image.size.width > 0, image.size.height > 0 else {
             throw ImageProcessorError.invalidImageData
@@ -19,8 +20,17 @@ enum ImageProcessor {
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
 
-        guard let data = resizedImage.jpegData(compressionQuality: compressionQuality) else {
+        var quality = min(max(compressionQuality, 0.35), 0.9)
+        guard var data = resizedImage.jpegData(compressionQuality: quality) else {
             throw ImageProcessorError.compressionFailed
+        }
+
+        while data.count > maximumByteCount, quality > 0.35 {
+            quality = max(quality - 0.1, 0.35)
+            guard let recompressedData = resizedImage.jpegData(compressionQuality: quality) else {
+                throw ImageProcessorError.compressionFailed
+            }
+            data = recompressedData
         }
 
         return data

@@ -78,7 +78,7 @@ struct SettingsView: View {
                     pendingImportData = nil
                 }
             } message: {
-                Text("This will replace the current meals, goals, profile, settings, and API key with the data from the backup file.")
+                Text("This will replace the current meals, goals, profile, and settings with the data from the backup file.")
             }
             .alert("Backup", isPresented: backupMessageBinding) {
                 Button("OK", role: .cancel) {
@@ -216,13 +216,23 @@ struct SettingsView: View {
             SecureField("Gemini API Key", text: $geminiApiKey)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+
+            if geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Label("Required for AI Scan and AI Guess", systemImage: "exclamationmark.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("API key saved on this device", systemImage: "checkmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.green)
+            }
         }
     }
 
     private var backupSection: some View {
         Section(
             header: Text("Backup"),
-            footer: Text("Export a backup before deleting the app. Save it in Files or iCloud Drive, then import it after reinstalling.")
+            footer: Text("Export a backup before deleting the app. The Gemini API key is not included and must be entered again after reinstalling.")
         ) {
             Button {
                 exportBackup()

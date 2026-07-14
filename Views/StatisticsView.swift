@@ -43,6 +43,9 @@ struct StatisticsView: View {
             .onAppear {
                 loadStats()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .foodItemsDidChange)) { _ in
+                loadStats()
+            }
             .onChange(of: selectedRange) {
                 loadStats()
             }

@@ -13,16 +13,20 @@ The app is a SwiftUI MVVM app backed by SwiftData. Views own presentation, ViewM
 
 ## AI Flow
 Image AI:
-`AICameraEntryView` -> `AICameraEntryViewModel` -> `ImageProcessor` -> `NetworkManager.estimateCalories(fromBase64Image:)` -> `NutritionEstimate` -> `FoodConfirmationView` -> SwiftData.
+`AICameraEntryView` -> `AICameraEntryViewModel` -> `ImageProcessor` -> `NutritionEstimating` -> `NetworkManager` -> retry/gate/cache -> Gemini -> `NutritionEstimate` -> `FoodConfirmationView` -> SwiftData.
 
 Text AI:
-`ManualEntryView` AI Guess tab -> `ManualEntryViewModel` -> `NetworkManager.estimateNutrition(foodName:grams:)` -> editable fields -> SwiftData.
+`ManualEntryView` AI Guess tab -> `ManualEntryViewModel` -> `NutritionEstimating` -> `NetworkManager` -> Gemini Flash-Lite -> editable fields -> SwiftData.
+
+Gemini responses are constrained by JSON Schema and validated again locally. Temporary server failures receive bounded retry. Rate limits create a local cooldown, identical requests share one in-flight task, and successful estimates are cached briefly.
 
 ## Persistence
 - `DailyGoal` and `FoodItem` are SwiftData `@Model` types.
 - Current diet targets are stored in `UserDefaults` through `DailyGoalTargets`.
 - Profile/settings/API key/theme/backup metadata use `@AppStorage` and backup snapshots.
 - Backups serialize goals, food items, profile, settings, image data, and current targets.
+- Backups are fully validated before replacing current SwiftData records and intentionally exclude the Gemini API key.
+- `DailyGoalStore` canonicalizes one `DailyGoal` per calendar day without a SwiftData schema change.
 
 ## Mermaid Mindmap
 ```mermaid
@@ -45,6 +49,7 @@ mindmap
       Backup
         BackupManager
         BackupDocument
+        API Key Excluded
     Views
       Dashboard
         Progress Ring
@@ -77,6 +82,8 @@ mindmap
       NetworkManager
         Gemini Image Estimate
         Gemini Text Estimate
+        Retry and Cooldown
+        Coalescing and Cache
     Utilities
       FoodEntryValidator
       NutritionCalculator
@@ -85,6 +92,7 @@ mindmap
     CI
       project.yml
       codemagic.yaml
+      Unit Tests
       ScreenshotUITests
 ```
 
@@ -92,5 +100,6 @@ mindmap
 - Keep model changes conservative; add migration planning before changing persisted model shape.
 - Prefer adding helper structs/functions near related views unless shared across screens.
 - Keep AI responses parsed through `NutritionEstimate`.
+- Keep external AI calls behind `NutritionEstimating` and cover new status handling with mocked `URLProtocol` tests.
 - Preserve confirmation/edit-before-save behavior for AI outputs.
 - Keep Codemagic workflows working from generated XcodeGen project.

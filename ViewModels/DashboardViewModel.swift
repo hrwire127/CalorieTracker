@@ -161,6 +161,7 @@ final class DashboardViewModel: ObservableObject {
             try modelContext.save()
             updateState(with: goal)
             updateHabitState(using: modelContext)
+            notifyFoodItemsChanged()
         } catch {
             showError("Unable to save this food item.", underlyingError: error)
         }
@@ -189,6 +190,7 @@ final class DashboardViewModel: ObservableObject {
             try modelContext.save()
             updateState(with: goal)
             updateHabitState(using: modelContext)
+            notifyFoodItemsChanged()
         } catch {
             showError("Unable to update the daily goal.", underlyingError: error)
         }
@@ -217,6 +219,7 @@ final class DashboardViewModel: ObservableObject {
                 loadToday(using: modelContext)
             }
             updateHabitState(using: modelContext)
+            notifyFoodItemsChanged()
         } catch {
             showError("Unable to update this food item.", underlyingError: error)
         }
@@ -246,6 +249,7 @@ final class DashboardViewModel: ObservableObject {
             try modelContext.save()
             updateState(with: goal)
             updateHabitState(using: modelContext)
+            notifyFoodItemsChanged()
         } catch {
             showError("Unable to delete the selected food item.", underlyingError: error)
         }
@@ -263,7 +267,11 @@ final class DashboardViewModel: ObservableObject {
     }
 
     private func fetchOrCreateTodayGoal(in modelContext: ModelContext) throws -> DailyGoal {
-        if let existingGoal = try fetchTodayGoal(in: modelContext) {
+        if let existingGoal = try DailyGoalStore.goal(
+            for: Date(),
+            in: modelContext,
+            calendar: calendar
+        ) {
             return existingGoal
         }
 
@@ -303,33 +311,11 @@ final class DashboardViewModel: ObservableObject {
     }
 
     private func fetchLatestGoalBeforeToday(in modelContext: ModelContext) throws -> DailyGoal? {
-        let startOfToday = calendar.startOfDay(for: Date())
-        var descriptor = FetchDescriptor<DailyGoal>(
-            predicate: #Predicate<DailyGoal> { goal in
-                goal.date < startOfToday
-            },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        try DailyGoalStore.latestGoal(
+            before: Date(),
+            in: modelContext,
+            calendar: calendar
         )
-        descriptor.fetchLimit = 1
-
-        return try modelContext.fetch(descriptor).first
-    }
-
-    private func fetchTodayGoal(in modelContext: ModelContext) throws -> DailyGoal? {
-        let startOfToday = calendar.startOfDay(for: Date())
-        guard let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
-            return nil
-        }
-
-        var descriptor = FetchDescriptor<DailyGoal>(
-            predicate: #Predicate<DailyGoal> { goal in
-                goal.date >= startOfToday && goal.date < startOfTomorrow
-            },
-            sortBy: [SortDescriptor(\.date)]
-        )
-        descriptor.fetchLimit = 1
-
-        return try modelContext.fetch(descriptor).first
     }
 
     private func updateHabitState(using modelContext: ModelContext) {
@@ -448,5 +434,9 @@ final class DashboardViewModel: ObservableObject {
 
     private func showError(_ message: String, underlyingError: Error) {
         errorMessage = "\(message) \(underlyingError.localizedDescription)"
+    }
+
+    private func notifyFoodItemsChanged() {
+        NotificationCenter.default.post(name: .foodItemsDidChange, object: nil)
     }
 }

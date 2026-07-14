@@ -87,6 +87,9 @@ struct HistoryView: View {
             .onAppear {
                 reloadVisibleGoals()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .foodItemsDidChange)) { _ in
+                reloadVisibleGoals()
+            }
             .onChange(of: selectedDate) { _, newDate in
                 displayedMonth = newDate
                 reloadVisibleGoals()

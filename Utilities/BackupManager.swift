@@ -42,43 +42,24 @@ enum BackupManager {
             throw BackupManagerError.invalidBackup
         }
 
+        let importedGoals = try makeGoals(from: snapshot)
+
         let existingGoals = try fetchDailyGoals(using: modelContext)
         for goal in existingGoals {
             modelContext.delete(goal)
         }
 
-        for goalSnapshot in snapshot.goals {
-            let goal = DailyGoal(
-                date: goalSnapshot.date,
-                targetCalories: goalSnapshot.targetCalories,
-                targetProteinGrams: goalSnapshot.targetProteinGrams,
-                targetCarbGrams: goalSnapshot.targetCarbGrams,
-                targetFatGrams: goalSnapshot.targetFatGrams
-            )
-
-            let foodItems = goalSnapshot.foodItems.map { itemSnapshot in
-                FoodItem(
-                    id: itemSnapshot.id,
-                    name: itemSnapshot.name,
-                    calories: itemSnapshot.calories,
-                    grams: itemSnapshot.grams,
-                    proteinGrams: itemSnapshot.proteinGrams,
-                    carbGrams: itemSnapshot.carbGrams,
-                    fatGrams: itemSnapshot.fatGrams,
-                    healthScore: itemSnapshot.healthScore,
-                    timestamp: itemSnapshot.timestamp,
-                    imageData: itemSnapshot.imageData,
-                    dailyGoal: goal
-                )
-            }
-
-            goal.foodItems = foodItems
-            goal.recalculateTotalConsumedCalories()
+        for goal in importedGoals {
             modelContext.insert(goal)
         }
 
-        snapshot.profile.restoreToUserDefaults()
-        try modelContext.save()
+        do {
+            try modelContext.save()
+            snapshot.profile.restoreToUserDefaults()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
     }
 
     private static func fetchDailyGoals(using modelContext: ModelContext) throws -> [DailyGoal] {
@@ -88,13 +69,91 @@ enum BackupManager {
 
         return try modelContext.fetch(descriptor)
     }
+
+    private static func makeGoals(from snapshot: CalorieTrackerBackupSnapshot) throws -> [DailyGoal] {
+        guard (1...CalorieTrackerBackupSnapshot.currentSchemaVersion).contains(snapshot.schemaVersion) else {
+            throw BackupManagerError.invalidBackup
+        }
+
+        let calendar = Calendar.current
+        var importedDays = Set<Date>()
+        var importedFoodIDs = Set<UUID>()
+
+        return try snapshot.goals.map { goalSnapshot in
+            let day = calendar.startOfDay(for: goalSnapshot.date)
+            guard importedDays.insert(day).inserted,
+                  goalSnapshot.targetCalories > 0,
+                  goalSnapshot.targetProteinGrams >= 0,
+                  goalSnapshot.targetCarbGrams >= 0,
+                  goalSnapshot.targetFatGrams >= 0 else {
+                throw BackupManagerError.invalidBackup
+            }
+
+            let goal = DailyGoal(
+                date: day,
+                targetCalories: goalSnapshot.targetCalories,
+                targetProteinGrams: goalSnapshot.targetProteinGrams,
+                targetCarbGrams: goalSnapshot.targetCarbGrams,
+                targetFatGrams: goalSnapshot.targetFatGrams
+            )
+
+            let foodItems = try goalSnapshot.foodItems.map { itemSnapshot in
+                guard importedFoodIDs.insert(itemSnapshot.id).inserted else {
+                    throw BackupManagerError.invalidBackup
+                }
+
+                guard let entry = try? FoodEntryValidator.validate(
+                    name: itemSnapshot.name,
+                    calories: itemSnapshot.calories,
+                    grams: itemSnapshot.grams,
+                    proteinGrams: itemSnapshot.proteinGrams,
+                    carbGrams: itemSnapshot.carbGrams,
+                    fatGrams: itemSnapshot.fatGrams,
+                    healthScore: itemSnapshot.healthScore
+                ) else {
+                    throw BackupManagerError.invalidBackup
+                }
+
+                return FoodItem(
+                    id: itemSnapshot.id,
+                    name: entry.name,
+                    calories: entry.calories,
+                    grams: entry.grams,
+                    proteinGrams: entry.proteinGrams,
+                    carbGrams: entry.carbGrams,
+                    fatGrams: entry.fatGrams,
+                    healthScore: entry.healthScore,
+                    timestamp: itemSnapshot.timestamp,
+                    imageData: itemSnapshot.imageData,
+                    dailyGoal: goal
+                )
+            }
+
+            goal.foodItems = foodItems
+            goal.recalculateTotalConsumedCalories()
+            return goal
+        }
+    }
 }
 
 struct CalorieTrackerBackupSnapshot: Codable {
-    let schemaVersion = 1
+    static let currentSchemaVersion = 2
+
+    let schemaVersion: Int
     let exportedAt: Date
     let profile: BackupProfileSnapshot
     let goals: [BackupDailyGoalSnapshot]
+
+    init(
+        exportedAt: Date,
+        profile: BackupProfileSnapshot,
+        goals: [BackupDailyGoalSnapshot]
+    ) {
+        schemaVersion = Self.currentSchemaVersion
+        self.exportedAt = exportedAt
+        self.profile = profile
+        self.goals = goals
+    }
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -105,7 +164,6 @@ struct CalorieTrackerBackupSnapshot: Codable {
 }
 
 struct BackupProfileSnapshot: Codable {
-    let geminiApiKey: String
     let profileName: String
     let profileWeightKg: String
     let profileHeightCm: String
@@ -124,7 +182,6 @@ struct BackupProfileSnapshot: Codable {
         let defaults = UserDefaults.standard
         let currentTargets = DailyGoalTargets.current
         return BackupProfileSnapshot(
-            geminiApiKey: defaults.string(forKey: "GeminiApiKey") ?? "",
             profileName: defaults.string(forKey: "ProfileName") ?? "",
             profileWeightKg: defaults.string(forKey: "ProfileWeightKg") ?? "",
             profileHeightCm: defaults.string(forKey: "ProfileHeightCm") ?? "",
@@ -143,7 +200,6 @@ struct BackupProfileSnapshot: Codable {
 
     func restoreToUserDefaults() {
         let defaults = UserDefaults.standard
-        defaults.set(geminiApiKey, forKey: "GeminiApiKey")
         defaults.set(profileName, forKey: "ProfileName")
         defaults.set(profileWeightKg, forKey: "ProfileWeightKg")
         defaults.set(profileHeightCm, forKey: "ProfileHeightCm")

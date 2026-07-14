@@ -11,13 +11,26 @@ final class ManualEntryViewModel: ObservableObject {
     @Published var fatText = ""
     @Published var healthScoreText = ""
     @Published var validationMessage: String?
-    @Published var errorMessage: String?
+    @Published private(set) var failure: AIRequestFailure?
     @Published private(set) var isGuessingNutrition = false
+    @Published private(set) var hasAIResult = false
 
-    private let networkManager: NetworkManager
+    private let networkManager: any NutritionEstimating
 
-    init(networkManager: NetworkManager = .shared) {
+    init(networkManager: any NutritionEstimating = NetworkManager.shared) {
         self.networkManager = networkManager
+    }
+
+    var errorMessage: String? {
+        failure?.message
+    }
+
+    var errorTitle: String {
+        failure?.title ?? "AI Guess"
+    }
+
+    var canRetryFailure: Bool {
+        failure?.canRetry == true && canGuessNutrition
     }
 
     var canSave: Bool {
@@ -46,6 +59,10 @@ final class ManualEntryViewModel: ObservableObject {
     }
 
     func guessNutrition() async {
+        guard !isGuessingNutrition else {
+            return
+        }
+
         guard let grams = parsedGuessGrams else {
             validationMessage = FoodEntryValidationError.invalidGrams.localizedDescription
             return
@@ -57,8 +74,9 @@ final class ManualEntryViewModel: ObservableObject {
         }
 
         isGuessingNutrition = true
+        hasAIResult = false
         validationMessage = nil
-        errorMessage = nil
+        failure = nil
         defer { isGuessingNutrition = false }
 
         do {
@@ -67,8 +85,9 @@ final class ManualEntryViewModel: ObservableObject {
                 grams: grams
             )
             apply(estimate: estimate, originalGrams: grams)
+            hasAIResult = true
         } catch {
-            errorMessage = error.localizedDescription
+            failure = AIRequestFailure(error: error, fallbackTitle: "AI Guess")
         }
     }
 
@@ -85,7 +104,7 @@ final class ManualEntryViewModel: ObservableObject {
     }
 
     func clearError() {
-        errorMessage = nil
+        failure = nil
     }
 
     private func apply(estimate: NutritionEstimate, originalGrams: Int) {

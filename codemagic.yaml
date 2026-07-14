@@ -175,8 +175,42 @@ workflows:
             grep -nE "error:|fatal error:|No such module|cannot find|failed" /tmp/xcodebuild_logs/simulator-build.log | tail -100 || true
             exit $BUILD_STATUS
           fi
+      - name: Run unit tests
+        script: |
+          mkdir -p /tmp/xcodebuild_logs
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone (16|15|14)" | head -1 | sed -E 's/.*\(([A-F0-9-]+)\).*/\1/')
+          if [ -z "$DEVICE_ID" ]; then
+            echo "Could not find an available iPhone simulator."
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+          DERIVED_DATA_PATH="$CM_BUILD_DIR/build/TestDerivedData"
+          RESULT_BUNDLE_PATH="$CM_BUILD_DIR/build/UnitTests.xcresult"
+          rm -rf "$RESULT_BUNDLE_PATH"
+
+          set +e
+          xcodebuild test \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -destination "id=$DEVICE_ID" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            -only-testing:CalorieTrackerTests \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee /tmp/xcodebuild_logs/unit-tests.log
+          TEST_STATUS=${PIPESTATUS[0]}
+          if [ $TEST_STATUS -ne 0 ]; then
+            echo "---- Relevant unit test errors ----"
+            grep -nE "error:|fatal error:|failed|XCTAssert|XCTFail|Test Case.*failed" /tmp/xcodebuild_logs/unit-tests.log | tail -140 || true
+            exit $TEST_STATUS
+          fi
     artifacts:
       - /tmp/xcodebuild_logs/*.log
+      - build/UnitTests.xcresult/**
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
@@ -246,71 +280,3 @@ workflows:
       - build/ios/unsigned/Payload/*.app
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-
-  ios-testflight:
-    name: iOS TestFlight
-    max_build_duration: 120
-    instance_type: mac_mini_m2
-    integrations:
-      app_store_connect: codemagic
-    environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: "com.artiom.calorietracker"
-      vars:
-        BUNDLE_ID: "com.artiom.calorietracker"
-        XCODE_PROJECT: "CalorieTracker.xcodeproj"
-        XCODE_SCHEME: "CalorieTracker"
-        APP_STORE_APPLE_ID: "0000000000"
-      xcode: latest
-    scripts:
-      - name: Install XcodeGen
-        script: |
-          if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen
-          fi
-      - name: Generate Xcode project
-        script: |
-          cd "$CM_BUILD_DIR"
-          xcodegen generate --spec project.yml
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
-      - name: Increment build number
-        script: |
-          cd "$CM_BUILD_DIR"
-          if [ "$APP_STORE_APPLE_ID" = "0000000000" ]; then
-            echo "Replace APP_STORE_APPLE_ID with the Apple ID from App Store Connect > App Information."
-            exit 1
-          fi
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || echo 0)
-          agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
-      - name: Build IPA for distribution
-        script: |
-          mkdir -p /tmp/xcodebuild_logs
-          xcodebuild -version
-          set +e
-          xcode-project build-ipa \
-            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" 2>&1 | tee /tmp/xcodebuild_logs/ipa-build.log
-          BUILD_STATUS=${PIPESTATUS[0]}
-          if [ $BUILD_STATUS -ne 0 ]; then
-            echo "---- Relevant build errors ----"
-            grep -nE "error:|fatal error:|No such module|cannot find|failed" /tmp/xcodebuild_logs/ipa-build.log | tail -100 || true
-            exit $BUILD_STATUS
-          fi
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-    publishing:
-      email:
-        recipients:
-          - "your-email@example.com"
-        notify:
-          success: true
-          failure: true
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: false
-        submit_to_app_store: false
