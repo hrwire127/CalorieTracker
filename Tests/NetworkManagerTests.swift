@@ -67,36 +67,10 @@ final class NetworkManagerTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestCount, 2)
     }
 
-    func testTextEstimateFallsBackToGemini25WhenPrimaryIsUnavailable() async throws {
+    func testProgressReportsHTTPStatusRetryAndValidatedEstimate() async throws {
         StubURLProtocol.setHandler { request in
-            if StubURLProtocol.requestCount == 1 {
-                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.textModel) == true)
-                return Self.response(
-                    for: request,
-                    statusCode: 503,
-                    data: Self.errorResponse(message: "Temporarily unavailable")
-                )
-            }
+            XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.textModel) == true)
 
-            XCTAssertTrue(
-                request.url?.absoluteString.contains(GeminiConfiguration.textFallbackModels[0]) == true
-            )
-            return Self.response(
-                for: request,
-                statusCode: 200,
-                data: Self.validGeminiResponse()
-            )
-        }
-
-        let manager = makeManager(retryCount: 0)
-        let estimate = try await manager.estimateNutrition(foodName: "Greek yogurt", grams: 200)
-
-        XCTAssertEqual(estimate.estimatedCalories, 297)
-        XCTAssertEqual(StubURLProtocol.requestCount, 2)
-    }
-
-    func testProgressReportsHTTPStatusFallbackAndValidatedEstimate() async throws {
-        StubURLProtocol.setHandler { request in
             if StubURLProtocol.requestCount == 1 {
                 return Self.response(
                     for: request,
@@ -113,7 +87,7 @@ final class NetworkManagerTests: XCTestCase {
         }
 
         let recorder = ProgressRecorder()
-        let manager = makeManager(retryCount: 0)
+        let manager = makeManager(retryCount: 1)
         let estimate = try await manager.estimateNutrition(
             foodName: "Rice",
             grams: 100,
@@ -129,26 +103,14 @@ final class NetworkManagerTests: XCTestCase {
             $0.title == "Gemini returned HTTP 503"
                 && ($0.detail?.contains("Temporarily unavailable") == true)
         })
-        XCTAssertTrue(events.contains { $0.title == "Model failed" })
-        XCTAssertTrue(events.contains { $0.title == "Trying fallback model" })
+        XCTAssertTrue(events.contains { $0.title == "Retrying request" })
         XCTAssertTrue(events.contains { $0.title == "Gemini returned HTTP 200" })
         XCTAssertTrue(events.contains { $0.title == "Validated estimate" })
     }
 
-    func testImageEstimateFallsBackToGemini25WhenPrimaryIsUnavailable() async throws {
+    func testImageEstimateUsesGemini25FlashDirectly() async throws {
         StubURLProtocol.setHandler { request in
-            if StubURLProtocol.requestCount == 1 {
-                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
-                return Self.response(
-                    for: request,
-                    statusCode: 503,
-                    data: Self.errorResponse(message: "Temporarily unavailable")
-                )
-            }
-
-            XCTAssertTrue(
-                request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[0]) == true
-            )
+            XCTAssertTrue(request.url?.absoluteString.contains("gemini-2.5-flash") == true)
             return Self.response(
                 for: request,
                 statusCode: 200,
@@ -160,7 +122,7 @@ final class NetworkManagerTests: XCTestCase {
         let estimate = try await manager.estimateCalories(fromBase64Image: "test-image-payload")
 
         XCTAssertEqual(estimate.estimatedCalories, 297)
-        XCTAssertEqual(StubURLProtocol.requestCount, 2)
+        XCTAssertEqual(StubURLProtocol.requestCount, 1)
     }
 
     func testLongRateLimitDoesNotRetryImmediately() async throws {
