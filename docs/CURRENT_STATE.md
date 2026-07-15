@@ -7,16 +7,16 @@
 - Manual entry with image attachment and editable calories/macros/health score.
 - Manual entry AI Guess tab using food name + grams to estimate nutrition.
 - AI camera/photo entry using Gemini, with editable confirmation before saving.
-- Gemini requests use Gemini 3.1 Flash-Lite, system instructions, JSON Schema, typed errors, bounded retry, automatic `429` wait/retry, one-at-a-time execution, request coalescing, cache, local cooldown, and detailed progress messages.
+- Gemini requests use the user-selected Settings model, system instructions, JSON Schema, typed errors, bounded retry, automatic `429` wait/retry, one-at-a-time execution, request coalescing, cache, local cooldown, and detailed progress messages.
 - AI image payloads are resized/compressed before upload; failed scans retain the photo for manual completion.
 - Food item editing from dashboard/history.
 - Stats screen with 7D/1M/3M ranges, chart, goal line, maintenance line, average deficit/surplus, completed/missed days, net kcal lost/gained.
 - History screen with Week/Month modes, scoped fetching, selected period highlighting, and period food summary.
-- Settings profile with icons, name, weight, height, birth date, sex, activity, about me, theme, Gemini API key.
+- Settings profile with icons, name, weight, height, birth date, sex, activity, about me, theme, Gemini API key, and Gemini model selector.
 - Validated backup export/import for meals, goals, profile, settings, and current targets. API keys are intentionally excluded.
 - Streak bar colors days as success/surplus/empty.
 - Codemagic screenshot workflow exports PNGs from UI test attachments.
-- Codemagic simulator workflow runs 19 unit tests covering AI, persistence, backup, validation, rate-limit wait/retry, progress reporting, and Gemini request behavior.
+- Codemagic simulator workflow runs 21 unit tests covering AI, Gemini model selection, persistence, backup, validation, rate-limit wait/retry, progress reporting, and Gemini request behavior.
 
 ## Unfinished / Next Useful Work
 - Run the Codemagic `ios-simulator-build` workflow to compile and execute the new unit tests.

@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage("ProfileActivityLevel") private var profileActivityLevel = ActivityLevel.sedentary.rawValue
     @AppStorage("ProfileImageData") private var profileImageData: Data = Data()
     @AppStorage("AppThemePreference") private var appThemePreference = AppThemePreference.system.rawValue
+    @AppStorage("GeminiSelectedModel") private var selectedGeminiModel = GeminiModelOption.defaultOption.rawValue
 
     @State private var selectedProfilePhoto: PhotosPickerItem?
     @State private var backupDocument = BackupDocument()
@@ -211,11 +212,25 @@ struct SettingsView: View {
     private var apiSection: some View {
         Section(
             header: Text("API Settings"),
-            footer: Text("The API key is stored locally on your device and used to communicate with Google Gemini services for estimating calories.")
+            footer: Text("The API key and selected model are stored locally on your device. Change the model here, then retry AI Scan or AI Guess.")
         ) {
             SecureField("Gemini API Key", text: $geminiApiKey)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+
+            HStack(spacing: 10) {
+                FieldIcon(systemName: "cpu.fill", tint: .purple)
+                Picker("AI Model", selection: selectedGeminiModelBinding) {
+                    ForEach(GeminiModelOption.allCases) { option in
+                        Text(option.title)
+                            .tag(option.rawValue)
+                    }
+                }
+            }
+
+            Label(selectedGeminiModelOption.detail, systemImage: "info.circle")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
             if geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Label("Required for AI Scan and AI Guess", systemImage: "exclamationmark.circle")
@@ -287,6 +302,18 @@ struct SettingsView: View {
             sexRawValue: profileSex,
             activityRawValue: profileActivityLevel
         )
+    }
+
+    private var selectedGeminiModelOption: GeminiModelOption {
+        GeminiModelOption.option(for: selectedGeminiModel)
+    }
+
+    private var selectedGeminiModelBinding: Binding<String> {
+        Binding {
+            selectedGeminiModelOption.rawValue
+        } set: { newValue in
+            selectedGeminiModel = GeminiModelOption.option(for: newValue).rawValue
+        }
     }
 
     private var backupMessageBinding: Binding<Bool> {

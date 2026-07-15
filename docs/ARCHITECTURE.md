@@ -18,7 +18,7 @@ Image AI:
 Text AI:
 `ManualEntryView` AI Guess tab -> `ManualEntryViewModel` -> `NutritionEstimating` -> `NetworkManager` -> Gemini Flash-Lite -> editable fields -> SwiftData.
 
-Gemini responses are constrained by JSON Schema and validated again locally. The demo configuration uses Gemini 3.1 Flash-Lite directly for both photo and text estimates. Temporary server failures receive bounded retry, rate limits wait and retry automatically within a bounded window, identical requests share one in-flight task, successful estimates are cached briefly, and views can display detailed progress events from the AI pipeline.
+Gemini responses are constrained by JSON Schema and validated again locally. The active model is selected in Settings and read from `GeminiConfiguration` for both photo and text estimates. Temporary server failures receive bounded retry, rate limits wait and retry automatically within a bounded window, identical requests share one in-flight task, successful estimates are cached briefly, and views can display detailed progress events from the AI pipeline.
 
 ## Persistence
 - `DailyGoal` and `FoodItem` are SwiftData `@Model` types.
@@ -46,6 +46,7 @@ mindmap
         Profile
         Theme
         Gemini API Key
+        Gemini Model
       Backup
         BackupManager
         BackupDocument
