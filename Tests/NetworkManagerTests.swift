@@ -108,9 +108,9 @@ final class NetworkManagerTests: XCTestCase {
         XCTAssertTrue(events.contains { $0.title == "Validated estimate" })
     }
 
-    func testImageEstimateUsesGemini25FlashDirectly() async throws {
+    func testImageEstimateUsesConfiguredFlashLiteModelDirectly() async throws {
         StubURLProtocol.setHandler { request in
-            XCTAssertTrue(request.url?.absoluteString.contains("gemini-2.5-flash") == true)
+            XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
             return Self.response(
                 for: request,
                 statusCode: 200,

@@ -7,7 +7,7 @@
 - Manual entry with image attachment and editable calories/macros/health score.
 - Manual entry AI Guess tab using food name + grams to estimate nutrition.
 - AI camera/photo entry using Gemini, with editable confirmation before saving.
-- Gemini requests use Gemini 2.5 Flash, system instructions, JSON Schema, typed errors, bounded retry, automatic `429` wait/retry, one-at-a-time execution, request coalescing, cache, local cooldown, and detailed progress messages.
+- Gemini requests use Gemini 3.1 Flash-Lite, system instructions, JSON Schema, typed errors, bounded retry, automatic `429` wait/retry, one-at-a-time execution, request coalescing, cache, local cooldown, and detailed progress messages.
 - AI image payloads are resized/compressed before upload; failed scans retain the photo for manual completion.
 - Food item editing from dashboard/history.
 - Stats screen with 7D/1M/3M ranges, chart, goal line, maintenance line, average deficit/surplus, completed/missed days, net kcal lost/gained.
@@ -28,7 +28,7 @@
 
 ## Known Bugs / Risks
 - Local iOS builds cannot be validated on this Windows workspace.
-- Gemini model availability, quotas, and API behavior can change; typed errors and retry/cooldown reduce impact but cannot remove provider outages or quota limits.
+- Gemini model availability, quotas, and API behavior can change; typed errors and retry/cooldown reduce impact but cannot remove provider outages, unavailable models, or quota limits.
 - SwiftData + CloudKit is configured as `.automatic`; behavior depends on entitlements/signing environment.
 - Screenshot extraction in Codemagic has a fallback that copies PNGs from `.xcresult/Data`; keep this if `xcresulttool` changes.
 - History currently fetches only the visible period; calendar heat colors outside that period are intentionally unavailable.

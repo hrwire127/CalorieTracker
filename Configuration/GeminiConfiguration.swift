@@ -4,8 +4,8 @@ enum GeminiConfiguration {
     static var apiKey: String {
         UserDefaults.standard.string(forKey: "GeminiApiKey") ?? ""
     }
-    static let imageModel = "gemini-2.5-flash"
-    static let textModel = "gemini-2.5-flash"
+    static let imageModel = "gemini-3.1-flash-lite"
+    static let textModel = "gemini-3.1-flash-lite"
     static let imageFallbackModels: [String] = []
     static let textFallbackModels: [String] = []
 
