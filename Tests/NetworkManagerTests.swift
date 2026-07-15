@@ -95,7 +95,47 @@ final class NetworkManagerTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestCount, 2)
     }
 
-    func testImageEstimateFallsBackToGemini31ProWhenPrimaryIsUnavailable() async throws {
+    func testProgressReportsHTTPStatusFallbackAndValidatedEstimate() async throws {
+        StubURLProtocol.setHandler { request in
+            if StubURLProtocol.requestCount == 1 {
+                return Self.response(
+                    for: request,
+                    statusCode: 503,
+                    data: Self.errorResponse(message: "Temporarily unavailable")
+                )
+            }
+
+            return Self.response(
+                for: request,
+                statusCode: 200,
+                data: Self.validGeminiResponse()
+            )
+        }
+
+        let recorder = ProgressRecorder()
+        let manager = makeManager(retryCount: 0)
+        let estimate = try await manager.estimateNutrition(
+            foodName: "Rice",
+            grams: 100,
+            progress: { event in
+                await recorder.append(event)
+            }
+        )
+        let events = await recorder.snapshot()
+
+        XCTAssertEqual(estimate.estimatedCalories, 297)
+        XCTAssertTrue(events.contains { $0.title == "Preparing text request" })
+        XCTAssertTrue(events.contains {
+            $0.title == "Gemini returned HTTP 503"
+                && ($0.detail?.contains("Temporarily unavailable") == true)
+        })
+        XCTAssertTrue(events.contains { $0.title == "Model failed" })
+        XCTAssertTrue(events.contains { $0.title == "Trying fallback model" })
+        XCTAssertTrue(events.contains { $0.title == "Gemini returned HTTP 200" })
+        XCTAssertTrue(events.contains { $0.title == "Validated estimate" })
+    }
+
+    func testImageEstimateFallsBackToGemini25WhenPrimaryIsUnavailable() async throws {
         StubURLProtocol.setHandler { request in
             if StubURLProtocol.requestCount == 1 {
                 XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
@@ -121,85 +161,6 @@ final class NetworkManagerTests: XCTestCase {
 
         XCTAssertEqual(estimate.estimatedCalories, 297)
         XCTAssertEqual(StubURLProtocol.requestCount, 2)
-    }
-
-    func testImageEstimateFallsBackToGemini25WhenProFallbackIsUnavailable() async throws {
-        StubURLProtocol.setHandler { request in
-            if StubURLProtocol.requestCount == 1 {
-                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
-                return Self.response(
-                    for: request,
-                    statusCode: 503,
-                    data: Self.errorResponse(message: "Temporarily unavailable")
-                )
-            }
-
-            if StubURLProtocol.requestCount == 2 {
-                XCTAssertTrue(
-                    request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[0]) == true
-                )
-                return Self.response(
-                    for: request,
-                    statusCode: 503,
-                    data: Self.errorResponse(message: "Pro temporarily unavailable")
-                )
-            }
-
-            XCTAssertTrue(
-                request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[1]) == true
-            )
-            return Self.response(
-                for: request,
-                statusCode: 200,
-                data: Self.validGeminiResponse()
-            )
-        }
-
-        let manager = makeManager(retryCount: 0)
-        let estimate = try await manager.estimateCalories(fromBase64Image: "test-image-payload")
-
-        XCTAssertEqual(estimate.estimatedCalories, 297)
-        XCTAssertEqual(StubURLProtocol.requestCount, 3)
-    }
-
-    func testImageEstimateFallsBackToGemini25WhenProFallbackIsRateLimited() async throws {
-        StubURLProtocol.setHandler { request in
-            if StubURLProtocol.requestCount == 1 {
-                XCTAssertTrue(request.url?.absoluteString.contains(GeminiConfiguration.imageModel) == true)
-                return Self.response(
-                    for: request,
-                    statusCode: 503,
-                    data: Self.errorResponse(message: "Temporarily unavailable")
-                )
-            }
-
-            if StubURLProtocol.requestCount == 2 {
-                XCTAssertTrue(
-                    request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[0]) == true
-                )
-                return Self.response(
-                    for: request,
-                    statusCode: 429,
-                    headers: ["Retry-After": "30"],
-                    data: Self.errorResponse(message: "Preview model rate limited")
-                )
-            }
-
-            XCTAssertTrue(
-                request.url?.absoluteString.contains(GeminiConfiguration.imageFallbackModels[1]) == true
-            )
-            return Self.response(
-                for: request,
-                statusCode: 200,
-                data: Self.validGeminiResponse()
-            )
-        }
-
-        let manager = makeManager(retryCount: 0, rateLimitRetryCount: 1)
-        let estimate = try await manager.estimateCalories(fromBase64Image: "test-image-payload")
-
-        XCTAssertEqual(estimate.estimatedCalories, 297)
-        XCTAssertEqual(StubURLProtocol.requestCount, 3)
     }
 
     func testLongRateLimitDoesNotRetryImmediately() async throws {
@@ -442,6 +403,18 @@ final class NetworkManagerTests: XCTestCase {
             headerFields: headers
         )!
         return (response, data)
+    }
+}
+
+private actor ProgressRecorder {
+    private var events: [AIRequestProgressEvent] = []
+
+    func append(_ event: AIRequestProgressEvent) {
+        events.append(event)
+    }
+
+    func snapshot() -> [AIRequestProgressEvent] {
+        events
     }
 }
 

@@ -18,7 +18,7 @@ Image AI:
 Text AI:
 `ManualEntryView` AI Guess tab -> `ManualEntryViewModel` -> `NutritionEstimating` -> `NetworkManager` -> Gemini Flash-Lite -> editable fields -> SwiftData.
 
-Gemini responses are constrained by JSON Schema and validated again locally. Temporary server failures receive bounded retry, then image requests fall back through Gemini 3.1 Pro Preview and Gemini 2.5 Flash when appropriate. Primary-model rate limits wait and retry automatically within a bounded window; fallback-model rate limits can advance to the next configured model. Identical requests share one in-flight task, and successful estimates are cached briefly.
+Gemini responses are constrained by JSON Schema and validated again locally. Temporary server failures receive bounded retry, then image requests fall back to Gemini 2.5 Flash when appropriate. Primary-model rate limits wait and retry automatically within a bounded window. Identical requests share one in-flight task, successful estimates are cached briefly, and views can display detailed progress events from the AI pipeline.
 
 ## Persistence
 - `DailyGoal` and `FoodItem` are SwiftData `@Model` types.

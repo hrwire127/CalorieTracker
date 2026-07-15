@@ -2,8 +2,26 @@ import CryptoKit
 import Foundation
 
 protocol NutritionEstimating: AnyObject {
-    func estimateCalories(fromBase64Image base64Image: String) async throws -> NutritionEstimate
-    func estimateNutrition(foodName: String, grams: Int) async throws -> NutritionEstimate
+    func estimateCalories(
+        fromBase64Image base64Image: String,
+        progress: AIRequestProgressHandler?
+    ) async throws -> NutritionEstimate
+
+    func estimateNutrition(
+        foodName: String,
+        grams: Int,
+        progress: AIRequestProgressHandler?
+    ) async throws -> NutritionEstimate
+}
+
+extension NutritionEstimating {
+    func estimateCalories(fromBase64Image base64Image: String) async throws -> NutritionEstimate {
+        try await estimateCalories(fromBase64Image: base64Image, progress: nil)
+    }
+
+    func estimateNutrition(foodName: String, grams: Int) async throws -> NutritionEstimate {
+        try await estimateNutrition(foodName: foodName, grams: grams, progress: nil)
+    }
 }
 
 actor NetworkManager: NutritionEstimating {
@@ -57,11 +75,23 @@ actor NetworkManager: NutritionEstimating {
         self.jitterProvider = jitterProvider
     }
 
-    func estimateCalories(fromBase64Image base64Image: String) async throws -> NutritionEstimate {
+    func estimateCalories(
+        fromBase64Image base64Image: String,
+        progress: AIRequestProgressHandler? = nil
+    ) async throws -> NutritionEstimate {
         let cleanedImage = base64Image.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedImage.isEmpty else {
             throw NetworkManagerError.invalidEstimate
         }
+
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Preparing image request",
+                detail: "Building Gemini prompt with the compressed photo."
+            )
+        )
 
         let request = makeRequest(
             systemPrompt: GeminiConfiguration.nutritionistSystemPrompt,
@@ -75,15 +105,29 @@ actor NetworkManager: NutritionEstimating {
             key: .image(Self.sha256(cleanedImage)),
             request: request,
             models: [GeminiConfiguration.imageModel] + GeminiConfiguration.imageFallbackModels,
-            expectedGrams: nil
+            expectedGrams: nil,
+            progress: progress
         )
     }
 
-    func estimateNutrition(foodName: String, grams: Int) async throws -> NutritionEstimate {
+    func estimateNutrition(
+        foodName: String,
+        grams: Int,
+        progress: AIRequestProgressHandler? = nil
+    ) async throws -> NutritionEstimate {
         let cleanedFoodName = foodName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedFoodName.isEmpty, grams > 0 else {
             throw NetworkManagerError.invalidEstimate
         }
+
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Preparing text request",
+                detail: "\(cleanedFoodName), \(grams) g."
+            )
+        )
 
         let request = makeRequest(
             systemPrompt: GeminiConfiguration.nutritionTextGuessSystemPrompt,
@@ -101,7 +145,8 @@ actor NetworkManager: NutritionEstimating {
             key: .text(cleanedFoodName.lowercased(), grams),
             request: request,
             models: [GeminiConfiguration.textModel] + GeminiConfiguration.textFallbackModels,
-            expectedGrams: grams
+            expectedGrams: grams,
+            progress: progress
         )
     }
 
@@ -109,23 +154,59 @@ actor NetworkManager: NutritionEstimating {
         key: RequestKey,
         request: GeminiRequest,
         models: [String],
-        expectedGrams: Int?
+        expectedGrams: Int?,
+        progress: AIRequestProgressHandler?
     ) async throws -> NutritionEstimate {
         removeExpiredCacheEntries()
 
         if let cachedEstimate = cache[key]?.estimate {
+            await report(
+                progress,
+                AIRequestProgressEvent(
+                    kind: .success,
+                    title: "Using recent estimate",
+                    detail: cachedEstimate.aiProgressSummary
+                )
+            )
             return cachedEstimate
         }
 
         if let activeRequest = inFlightRequests[key] {
-            return try await activeRequest.value
+            await report(
+                progress,
+                AIRequestProgressEvent(
+                    kind: .active,
+                    title: "Waiting for matching request",
+                    detail: "The same request is already running, so this one will reuse it."
+                )
+            )
+            let estimate = try await activeRequest.value
+            await report(
+                progress,
+                AIRequestProgressEvent(
+                    kind: .success,
+                    title: "Matched request finished",
+                    detail: estimate.aiProgressSummary
+                )
+            )
+            return estimate
         }
+
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Request schema ready",
+                detail: "Gemini must return calories, grams, macros, and health score as JSON."
+            )
+        )
 
         let task = Task {
             try await requestNutritionEstimate(
                 request,
                 models: models,
-                expectedGrams: expectedGrams
+                expectedGrams: expectedGrams,
+                progress: progress
             )
         }
         inFlightRequests[key] = task
@@ -144,19 +225,41 @@ actor NetworkManager: NutritionEstimating {
     private func requestNutritionEstimate(
         _ requestBody: GeminiRequest,
         models: [String],
-        expectedGrams: Int?
+        expectedGrams: Int?,
+        progress: AIRequestProgressHandler?
     ) async throws -> NutritionEstimate {
         let availableModels = models.isEmpty ? [GeminiConfiguration.imageModel] : models
         var lastFailure: NetworkManagerError?
 
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Model plan",
+                detail: availableModels.joined(separator: " -> ")
+            )
+        )
+
         for (index, model) in availableModels.enumerated() {
+            if index > 0 {
+                await report(
+                    progress,
+                    AIRequestProgressEvent(
+                        kind: .warning,
+                        title: "Trying fallback model",
+                        detail: model
+                    )
+                )
+            }
+
             do {
                 return try await requestNutritionEstimateWithRetry(
                     requestBody,
                     model: model,
                     expectedGrams: expectedGrams,
                     retryLimit: index == 0 ? retryCount : 0,
-                    rateLimitRetryLimit: index == 0 ? rateLimitRetryCount : 0
+                    rateLimitRetryLimit: index == 0 ? rateLimitRetryCount : 0,
+                    progress: progress
                 )
             } catch let error as NetworkManagerError {
                 lastFailure = error
@@ -165,6 +268,15 @@ actor NetworkManager: NutritionEstimating {
                       shouldTryNextModel(after: error, failedModelIndex: index) else {
                     throw error
                 }
+
+                await report(
+                    progress,
+                    AIRequestProgressEvent(
+                        kind: .warning,
+                        title: "Model failed",
+                        detail: "\(model): \(error.progressDetail)"
+                    )
+                )
             }
         }
 
@@ -176,7 +288,8 @@ actor NetworkManager: NutritionEstimating {
         model: String,
         expectedGrams: Int?,
         retryLimit: Int,
-        rateLimitRetryLimit: Int
+        rateLimitRetryLimit: Int,
+        progress: AIRequestProgressHandler?
     ) async throws -> NutritionEstimate {
         var completedRetries = 0
         var completedRateLimitRetries = 0
@@ -194,6 +307,14 @@ actor NetworkManager: NutritionEstimating {
                 }
 
                 completedRateLimitRetries += 1
+                await report(
+                    progress,
+                    AIRequestProgressEvent(
+                        kind: .warning,
+                        title: "Local cooldown active",
+                        detail: "Waiting \(Self.formattedDelay(delay)) before retrying \(model)."
+                    )
+                )
                 try await sleepHandler(delay)
                 continue
             }
@@ -202,7 +323,8 @@ actor NetworkManager: NutritionEstimating {
                 return try await performGatedRequest(
                     requestBody,
                     model: model,
-                    expectedGrams: expectedGrams
+                    expectedGrams: expectedGrams,
+                    progress: progress
                 )
             } catch let error as NetworkManagerError {
                 recordRateLimitIfNeeded(error)
@@ -228,6 +350,14 @@ actor NetworkManager: NutritionEstimating {
                     completedRetries += 1
                 }
 
+                await report(
+                    progress,
+                    AIRequestProgressEvent(
+                        kind: .warning,
+                        title: "Retrying request",
+                        detail: "\(error.progressDetail) Waiting \(Self.formattedDelay(delay)) before attempt \(retryNumber + 2)."
+                    )
+                )
                 try await sleepHandler(delay)
             } catch is CancellationError {
                 throw CancellationError()
@@ -260,15 +390,27 @@ actor NetworkManager: NutritionEstimating {
     private func performGatedRequest(
         _ requestBody: GeminiRequest,
         model: String,
-        expectedGrams: Int?
+        expectedGrams: Int?,
+        progress: AIRequestProgressHandler?
     ) async throws -> NutritionEstimate {
-        await requestGate.acquire()
+        let waited = await requestGate.acquire()
+        if waited {
+            await report(
+                progress,
+                AIRequestProgressEvent(
+                    kind: .active,
+                    title: "API slot ready",
+                    detail: "Another local AI request finished; starting this one."
+                )
+            )
+        }
 
         do {
             let estimate = try await performSingleRequest(
                 requestBody,
                 model: model,
-                expectedGrams: expectedGrams
+                expectedGrams: expectedGrams,
+                progress: progress
             )
             await requestGate.release()
             return estimate
@@ -281,12 +423,22 @@ actor NetworkManager: NutritionEstimating {
     private func performSingleRequest(
         _ requestBody: GeminiRequest,
         model: String,
-        expectedGrams: Int?
+        expectedGrams: Int?,
+        progress: AIRequestProgressHandler?
     ) async throws -> NutritionEstimate {
         let apiKey = apiKeyProvider().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
             throw NetworkManagerError.missingAPIKey
         }
+
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Sending request to Gemini",
+                detail: "Model \(model), 45s timeout."
+            )
+        )
 
         var request = URLRequest(
             url: GeminiConfiguration.generateContentURL(model: model, apiKey: apiKey)
@@ -304,6 +456,14 @@ actor NetworkManager: NutritionEstimating {
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError {
+            await report(
+                progress,
+                AIRequestProgressEvent(
+                    kind: .failure,
+                    title: "Network transport failed",
+                    detail: error.localizedDescription
+                )
+            )
             throw NetworkManagerError.transport(error)
         } catch {
             throw NetworkManagerError.invalidResponse
@@ -314,8 +474,30 @@ actor NetworkManager: NutritionEstimating {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw makeAPIError(from: data, response: httpResponse)
+            let apiMessage = apiErrorMessage(from: data)
+            let apiError = makeAPIError(from: data, response: httpResponse)
+            await report(
+                progress,
+                AIRequestProgressEvent(
+                    kind: .warning,
+                    title: "Gemini returned HTTP \(httpResponse.statusCode)",
+                    detail: Self.combinedProgressDetail(
+                        localDetail: apiError.progressDetail,
+                        apiMessage: apiMessage
+                    )
+                )
+            )
+            throw apiError
         }
+
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .success,
+                title: "Gemini returned HTTP \(httpResponse.statusCode)",
+                detail: "Decoding JSON response."
+            )
+        )
 
         guard let completion = try? decoder.decode(GeminiResponse.self, from: data) else {
             throw NetworkManagerError.decodingFailed
@@ -341,8 +523,25 @@ actor NetworkManager: NutritionEstimating {
             throw NetworkManagerError.emptyResponse
         }
 
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Reading nutrition JSON",
+                detail: "Gemini response text: \(content.count) characters."
+            )
+        )
         let estimate = try decodeNutritionEstimate(from: content)
-        return try validatedEstimate(estimate, expectedGrams: expectedGrams)
+        let validatedEstimate = try validatedEstimate(estimate, expectedGrams: expectedGrams)
+        await report(
+            progress,
+            AIRequestProgressEvent(
+                kind: .success,
+                title: "Validated estimate",
+                detail: validatedEstimate.aiProgressSummary
+            )
+        )
+        return validatedEstimate
     }
 
     private func makeRequest(
@@ -370,9 +569,7 @@ actor NetworkManager: NutritionEstimating {
         from data: Data,
         response: HTTPURLResponse
     ) -> NetworkManagerError {
-        let apiError = try? decoder.decode(GeminiErrorResponse.self, from: data)
-        let message = apiError?.error.message.trimmingCharacters(in: .whitespacesAndNewlines)
-        let usefulMessage = message?.isEmpty == false ? message : nil
+        let usefulMessage = apiErrorMessage(from: data)
 
         switch response.statusCode {
         case 400:
@@ -390,6 +587,12 @@ actor NetworkManager: NutritionEstimating {
         default:
             return .apiError(statusCode: response.statusCode, message: usefulMessage)
         }
+    }
+
+    private func apiErrorMessage(from data: Data) -> String? {
+        let apiError = try? decoder.decode(GeminiErrorResponse.self, from: data)
+        let message = apiError?.error.message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return message?.isEmpty == false ? message : nil
     }
 
     private func retryAfter(
@@ -538,6 +741,13 @@ actor NetworkManager: NutritionEstimating {
         return .rateLimited(retryAfter: remainingDelay)
     }
 
+    private func report(
+        _ progress: AIRequestProgressHandler?,
+        _ event: AIRequestProgressEvent
+    ) async {
+        await progress?(event)
+    }
+
     private static func isRetryableTransportError(_ error: URLError) -> Bool {
         switch error.code {
         case .timedOut,
@@ -558,6 +768,27 @@ actor NetworkManager: NutritionEstimating {
         SHA256.hash(data: Data(value.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
+    }
+
+    private static func formattedDelay(_ delay: TimeInterval) -> String {
+        let roundedDelay = Int(ceil(delay))
+        if roundedDelay >= 60 {
+            let minutes = roundedDelay / 60
+            let seconds = roundedDelay % 60
+            return seconds == 0 ? "\(minutes)m" : "\(minutes)m \(seconds)s"
+        }
+        return "\(roundedDelay)s"
+    }
+
+    private static func combinedProgressDetail(
+        localDetail: String,
+        apiMessage: String?
+    ) -> String {
+        guard let apiMessage, !apiMessage.isEmpty, apiMessage != localDetail else {
+            return localDetail
+        }
+
+        return "\(localDetail) API message: \(apiMessage)"
     }
 
     static func defaultSleep(seconds: TimeInterval) async throws {
@@ -659,19 +890,56 @@ enum NetworkManagerError: LocalizedError {
             return "AI Analysis"
         }
     }
+
+    var progressDetail: String {
+        switch self {
+        case .missingAPIKey:
+            return "No Gemini API key is saved in Settings."
+        case .invalidResponse:
+            return "The response was not a valid Gemini HTTP response."
+        case .emptyResponse:
+            return "Gemini returned no nutrition text."
+        case .responseBlocked(let reason):
+            return "Gemini blocked the response: \(reason)."
+        case .decodingFailed:
+            return "The JSON could not be decoded into the nutrition fields."
+        case .invalidEstimate:
+            return "The estimate was missing required calories, grams, macros, or health score."
+        case .badRequest(let message):
+            return message ?? "Gemini rejected the request body."
+        case .authorizationFailed(let message):
+            return message ?? "The API key was rejected or lacks access to the selected model."
+        case .modelUnavailable:
+            return "The selected Gemini model is unavailable."
+        case .rateLimited(let retryAfter):
+            if let retryAfter {
+                return "Rate limit hit. Retry after about \(Int(ceil(retryAfter)))s."
+            }
+            return "Rate limit hit. Gemini did not provide a retry delay."
+        case .serviceUnavailable:
+            return "Gemini is temporarily busy or unavailable."
+        case .transport(let error):
+            return error.localizedDescription
+        case .apiError(let statusCode, let message):
+            if let message, !message.isEmpty {
+                return "HTTP \(statusCode): \(message)"
+            }
+            return "HTTP \(statusCode) with no extra message."
+        }
+    }
 }
 
 private actor AIRequestGate {
     private var isOccupied = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var waiters: [CheckedContinuation<Bool, Never>] = []
 
-    func acquire() async {
+    func acquire() async -> Bool {
         guard isOccupied else {
             isOccupied = true
-            return
+            return false
         }
 
-        await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             waiters.append(continuation)
         }
     }
@@ -682,7 +950,7 @@ private actor AIRequestGate {
             return
         }
 
-        waiters.removeFirst().resume()
+        waiters.removeFirst().resume(returning: true)
     }
 }
 

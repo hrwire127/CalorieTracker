@@ -14,8 +14,10 @@ final class ManualEntryViewModel: ObservableObject {
     @Published private(set) var failure: AIRequestFailure?
     @Published private(set) var isGuessingNutrition = false
     @Published private(set) var hasAIResult = false
+    @Published private(set) var progressEntries: [AIRequestProgressEntry] = []
 
     private let networkManager: any NutritionEstimating
+    private let maximumProgressEntryCount = 8
 
     init(networkManager: any NutritionEstimating = NetworkManager.shared) {
         self.networkManager = networkManager
@@ -77,17 +79,40 @@ final class ManualEntryViewModel: ObservableObject {
         hasAIResult = false
         validationMessage = nil
         failure = nil
+        progressEntries = []
+        recordProgress(
+            AIRequestProgressEvent(
+                kind: .active,
+                title: "Preparing food prompt",
+                detail: "\(cleanedFoodName), \(grams) g."
+            )
+        )
         defer { isGuessingNutrition = false }
 
         do {
             let estimate = try await networkManager.estimateNutrition(
                 foodName: cleanedFoodName,
-                grams: grams
+                grams: grams,
+                progress: progressHandler()
             )
             apply(estimate: estimate, originalGrams: grams)
             hasAIResult = true
+            recordProgress(
+                AIRequestProgressEvent(
+                    kind: .success,
+                    title: "Estimate ready",
+                    detail: estimate.aiProgressSummary
+                )
+            )
         } catch {
             failure = AIRequestFailure(error: error, fallbackTitle: "AI Guess")
+            recordProgress(
+                AIRequestProgressEvent(
+                    kind: .failure,
+                    title: "Guess stopped",
+                    detail: failure?.message
+                )
+            )
         }
     }
 
@@ -148,5 +173,18 @@ final class ManualEntryViewModel: ObservableObject {
         }
 
         return grams
+    }
+
+    private func progressHandler() -> AIRequestProgressHandler {
+        { [weak self] event in
+            await self?.recordProgress(event)
+        }
+    }
+
+    private func recordProgress(_ event: AIRequestProgressEvent) {
+        progressEntries.append(AIRequestProgressEntry(event: event))
+        if progressEntries.count > maximumProgressEntryCount {
+            progressEntries.removeFirst(progressEntries.count - maximumProgressEntryCount)
+        }
     }
 }

@@ -126,6 +126,11 @@ struct ManualEntryView: View {
             }
             .disabled(!viewModel.canGuessNutrition)
 
+            AIRequestProgressPanel(
+                entries: viewModel.progressEntries,
+                isActive: viewModel.isGuessingNutrition
+            )
+
             if viewModel.hasAIResult {
                 Label("Estimate ready to review", systemImage: "checkmark.circle.fill")
                     .font(.footnote)

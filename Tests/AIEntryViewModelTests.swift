@@ -6,7 +6,14 @@ import XCTest
 final class AIEntryViewModelTests: XCTestCase {
     func testManualGuessFillsEditableNutritionFields() async {
         let estimator = StubNutritionEstimator(
-            response: .success(Self.estimate)
+            response: .success(Self.estimate),
+            progressEvents: [
+                AIRequestProgressEvent(
+                    kind: .active,
+                    title: "Sending request to Gemini",
+                    detail: "Model test-model."
+                )
+            ]
         )
         let viewModel = ManualEntryViewModel(networkManager: estimator)
         viewModel.foodName = "Chicken breast"
@@ -22,6 +29,9 @@ final class AIEntryViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.healthScoreText, "9")
         XCTAssertTrue(viewModel.hasAIResult)
         XCTAssertNil(viewModel.failure)
+        XCTAssertTrue(viewModel.progressEntries.contains { $0.event.title == "Preparing food prompt" })
+        XCTAssertTrue(viewModel.progressEntries.contains { $0.event.title == "Sending request to Gemini" })
+        XCTAssertTrue(viewModel.progressEntries.contains { $0.event.title == "Estimate ready" })
     }
 
     func testManualGuessFailurePreservesRequiredInputs() async {
@@ -42,7 +52,14 @@ final class AIEntryViewModelTests: XCTestCase {
 
     func testImageFailureKeepsCompressedPhotoForManualFallback() async {
         let estimator = StubNutritionEstimator(
-            response: .failure(.rateLimited(retryAfter: 30))
+            response: .failure(.rateLimited(retryAfter: 30)),
+            progressEvents: [
+                AIRequestProgressEvent(
+                    kind: .warning,
+                    title: "Gemini returned HTTP 429",
+                    detail: "Rate limit hit. Retry after about 30s."
+                )
+            ]
         )
         let viewModel = AICameraEntryViewModel(networkManager: estimator)
         let image = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80)).image { context in
@@ -55,6 +72,11 @@ final class AIEntryViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.selectedImageData)
         XCTAssertTrue(viewModel.canContinueManually)
         XCTAssertEqual(viewModel.failure?.title, "AI Limit Reached")
+        XCTAssertTrue(viewModel.progressEntries.contains { $0.event.title == "Photo ready" })
+        XCTAssertTrue(viewModel.progressEntries.contains { $0.event.title == "Gemini returned HTTP 429" })
+        XCTAssertTrue(viewModel.progressEntries.contains { $0.event.title == "Analysis stopped" })
+        XCTAssertEqual(viewModel.currentProgressTitle, "Analysis stopped")
+        XCTAssertTrue(viewModel.canRetryAnalysis)
 
         viewModel.prepareManualEntry()
 
@@ -81,16 +103,31 @@ private actor StubNutritionEstimator: NutritionEstimating {
     }
 
     private let response: Response
+    private let progressEvents: [AIRequestProgressEvent]
 
-    init(response: Response) {
+    init(response: Response, progressEvents: [AIRequestProgressEvent] = []) {
         self.response = response
+        self.progressEvents = progressEvents
     }
 
-    func estimateCalories(fromBase64Image base64Image: String) async throws -> NutritionEstimate {
+    func estimateCalories(
+        fromBase64Image base64Image: String,
+        progress: AIRequestProgressHandler?
+    ) async throws -> NutritionEstimate {
+        for event in progressEvents {
+            await progress?(event)
+        }
         try result()
     }
 
-    func estimateNutrition(foodName: String, grams: Int) async throws -> NutritionEstimate {
+    func estimateNutrition(
+        foodName: String,
+        grams: Int,
+        progress: AIRequestProgressHandler?
+    ) async throws -> NutritionEstimate {
+        for event in progressEvents {
+            await progress?(event)
+        }
         try result()
     }
 

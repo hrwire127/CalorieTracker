@@ -35,22 +35,42 @@ struct AICameraEntryView: View {
                 }
 
                 if viewModel.isAnalyzing {
-                    ProgressView("Analyzing or waiting for API")
-                        .padding(.top, 4)
+                    HStack(alignment: .top, spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(.top, 2)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(viewModel.currentProgressTitle)
+                                .font(.footnote.weight(.semibold))
+
+                            Text(viewModel.currentProgressDetail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
                 }
 
-                if viewModel.canRetryFailure {
-                    Button {
-                        Task {
-                            await viewModel.retryLastAnalysis()
-                        }
-                    } label: {
-                        Label("Retry Analysis", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity)
+                AIRequestProgressPanel(
+                    entries: viewModel.progressEntries,
+                    isActive: viewModel.isAnalyzing
+                )
+
+                Button {
+                    Task {
+                        await viewModel.retryLastAnalysis()
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(viewModel.isAnalyzing)
+                } label: {
+                    Label("Retry Analysis", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
+                .disabled(!viewModel.canRetryAnalysis)
 
                 if viewModel.failure != nil, viewModel.canContinueManually {
                     Button {
@@ -102,7 +122,7 @@ struct AICameraEntryView: View {
                 }
             }
             .alert(viewModel.errorTitle, isPresented: errorBinding) {
-                if viewModel.canRetryFailure {
+                if viewModel.canRetryAnalysis {
                     Button("Retry") {
                         Task {
                             await viewModel.retryLastAnalysis()
